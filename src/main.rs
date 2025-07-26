@@ -4,11 +4,8 @@ static ALLOCATOR: jemallocator::Jemalloc = jemallocator::Jemalloc;
 use async_trait::async_trait;
 use http::Response;
 use pingora::{
-    apps::http_app::ServeHttp,
-    listeners::TcpSocketOptions,
-    prelude::*,
-    protocols::{TcpKeepalive, http::ServerSession},
-    services::listening::Service,
+    apps::http_app::ServeHttp, listeners::TcpSocketOptions, prelude::*,
+    protocols::http::ServerSession, services::listening::Service,
 };
 
 struct RinhaHttpApp;
