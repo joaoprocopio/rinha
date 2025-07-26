@@ -1,8 +1,14 @@
+#[global_allocator]
+static ALLOCATOR: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 use async_trait::async_trait;
 use http::Response;
 use pingora::{
-    apps::http_app::ServeHttp, listeners::TcpSocketOptions, prelude::*,
-    protocols::http::ServerSession, services::listening::Service,
+    apps::http_app::ServeHttp,
+    listeners::TcpSocketOptions,
+    prelude::*,
+    protocols::{TcpKeepalive, http::ServerSession},
+    services::listening::Service,
 };
 
 struct RinhaHttpApp;
@@ -33,7 +39,6 @@ fn main() {
     let mut rinha = rinha_http_service();
 
     rinha.add_tcp_with_settings("127.0.0.1:8000", TcpSocketOptions::default());
-    rinha.add_uds("/var/run/rinha/rinha.sock", None);
 
     server.add_service(rinha);
     server.run_forever();
