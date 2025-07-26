@@ -1,0 +1,21 @@
+services:
+  rinha:
+    build:
+      context: .
+      dockerfile: dockerfile
+    hostname: rinha
+    container_name: rinha
+    ports:
+      - target: 8000
+        published: 8000
+        protocol: tcp
+        mode: host
+    deploy:
+      resources:
+        limits:
+          cpus: 1.5
+          memory: 350MB
+
+networks:
+  payment-processor:
+    external: true
