@@ -1,11 +1,8 @@
 use async_trait::async_trait;
 use http::Response;
 use pingora::{
-    apps::http_app::{HttpServer, ServeHttp},
-    modules::http::compression::ResponseCompressionBuilder,
-    prelude::*,
-    protocols::{Stream, http::ServerSession},
-    services::listening::Service,
+    apps::http_app::ServeHttp, listeners::TcpSocketOptions, prelude::*,
+    protocols::http::ServerSession, services::listening::Service,
 };
 
 struct RinhaHttpApp;
@@ -25,34 +22,19 @@ impl ServeHttp for RinhaHttpApp {
     }
 }
 
-struct RinhaServer(HttpServer<RinhaHttpApp>);
-
-impl RinhaServer {
-    fn new() -> Self {
-        let mut server = HttpServer::new_app(RinhaHttpApp);
-        server.add_module(ResponseCompressionBuilder::enable(7));
-        Self(server)
-    }
-}
-
-struct RinhaService(Service<RinhaServer>);
-
-impl RinhaService {
-    fn rinha_http_service() -> Self {
-        Self(Service::new(
-            "Rinha HTTP Service".to_string(),
-            RinhaServer::new(),
-        ))
-    }
+fn rinha_http_service() -> Service<RinhaHttpApp> {
+    Service::new("Rinha HTTP Service".to_string(), RinhaHttpApp)
 }
 
 fn main() {
     let mut server = Server::new(None).unwrap();
     server.bootstrap();
 
-    let mut rinha_http_service = RinhaService::rinha_http_service().0;
-    rinha_http_service.add_tcp("127.0.0.1:8080");
-    server.add_service(rinha_http_service);
+    let mut rinha = rinha_http_service();
 
+    rinha.add_tcp_with_settings("127.0.0.1:8000", TcpSocketOptions::default());
+    rinha.add_uds("/var/run/rinha/rinha.sock", None);
+
+    server.add_service(rinha);
     server.run_forever();
 }
