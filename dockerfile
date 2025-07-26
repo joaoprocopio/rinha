@@ -1,4 +1,8 @@
-FROM rust:1.88-bookworm AS builder
+FROM rust:1.88-slim-bookworm AS builder
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake
 
 WORKDIR /app
 COPY . .

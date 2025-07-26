@@ -8,34 +8,33 @@ use pingora::{
     protocols::http::ServerSession, services::listening::Service,
 };
 
-struct RinhaHttpApp;
+struct Rinha;
 
 #[async_trait]
-impl ServeHttp for RinhaHttpApp {
+impl ServeHttp for Rinha {
     async fn response(&self, _http_session: &mut ServerSession) -> Response<Vec<u8>> {
         let text = "Hello, world!";
         let buf = text.as_bytes().to_vec();
 
         Response::builder()
             .status(200)
-            .header(http::header::CONTENT_TYPE, "text/plain; version=0.0.4")
+            .header(http::header::CONTENT_TYPE, "text/plain")
             .header(http::header::CONTENT_LENGTH, buf.len())
             .body(buf)
             .unwrap()
     }
 }
 
-fn rinha_http_service() -> Service<RinhaHttpApp> {
-    Service::new("Rinha HTTP Service".to_string(), RinhaHttpApp)
+fn rinha_service() -> Service<Rinha> {
+    Service::new("Rinha HTTP Service".to_string(), Rinha)
 }
 
 fn main() {
     let mut server = Server::new(None).unwrap();
     server.bootstrap();
 
-    let mut rinha = rinha_http_service();
-
-    rinha.add_tcp_with_settings("127.0.0.1:8000", TcpSocketOptions::default());
+    let mut rinha = rinha_service();
+    rinha.add_tcp("0.0.0.0:9999");
 
     server.add_service(rinha);
     server.run_forever();
