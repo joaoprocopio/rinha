@@ -4,16 +4,17 @@ static ALLOCATOR: jemallocator::Jemalloc = jemallocator::Jemalloc;
 use async_trait::async_trait;
 use http::Response;
 use pingora::{
-    apps::http_app::ServeHttp, listeners::TcpSocketOptions, prelude::*,
-    protocols::http::ServerSession, services::listening::Service,
+    apps::http_app::ServeHttp, prelude::*, protocols::http::ServerSession,
+    services::listening::Service,
 };
 
 struct Rinha;
 
 #[async_trait]
 impl ServeHttp for Rinha {
-    async fn response(&self, _http_session: &mut ServerSession) -> Response<Vec<u8>> {
+    async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
         let text = "Hello, world!";
+        println!("{:?}", http_session.req_header());
         let buf = text.as_bytes().to_vec();
 
         Response::builder()
