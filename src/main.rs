@@ -8,7 +8,9 @@ mod rinha_worker;
 use pingora::prelude::*;
 use tokio::sync::broadcast;
 
-use crate::{rinha_domain::Payment, rinha_http::rinha_service, rinha_worker::rinha_worker_service};
+use crate::{
+    rinha_domain::Payment, rinha_http::rinha_http_service, rinha_worker::rinha_worker_service,
+};
 
 fn main() {
     let mut server = Server::new(None).unwrap();
@@ -19,12 +21,12 @@ fn main() {
     // isso vai fazer a mesma struct ser processada N — sendo N o número de workers
     let (sender, receiver) = broadcast::channel::<Payment>(size_of::<Payment>() * 100);
 
-    let mut rinha = rinha_service(sender);
-    rinha.add_tcp("0.0.0.0:9999");
+    let mut rinha_http = rinha_http_service(sender);
+    rinha_http.add_tcp("0.0.0.0:9999");
 
     let rinha_worker = rinha_worker_service(receiver);
 
-    server.add_service(rinha);
+    server.add_service(rinha_http);
     server.add_service(rinha_worker);
 
     server.run_forever();

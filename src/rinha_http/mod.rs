@@ -10,11 +10,11 @@ use pingora::{
 
 use crate::rinha_domain::Payment;
 
-pub struct Rinha {
+pub struct RinhaHttp {
     sender: Arc<broadcast::Sender<Payment>>,
 }
 
-impl Rinha {
+impl RinhaHttp {
     fn new(sender: broadcast::Sender<Payment>) -> Self {
         Self {
             sender: Arc::new(sender),
@@ -23,7 +23,7 @@ impl Rinha {
 }
 
 #[async_trait]
-impl ServeHttp for Rinha {
+impl ServeHttp for RinhaHttp {
     async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
         let header = http_session.req_header();
 
@@ -52,6 +52,6 @@ impl ServeHttp for Rinha {
     }
 }
 
-pub fn rinha_service(sender: broadcast::Sender<Payment>) -> Service<Rinha> {
-    Service::new("Rinha HTTP Service".to_string(), Rinha::new(sender))
+pub fn rinha_http_service(sender: broadcast::Sender<Payment>) -> Service<RinhaHttp> {
+    Service::new("Rinha HTTP Service".to_string(), RinhaHttp::new(sender))
 }
