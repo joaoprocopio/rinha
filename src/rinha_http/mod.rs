@@ -1,21 +1,20 @@
 use std::sync::Arc;
 
-use tokio::sync::broadcast;
-
 use async_trait::async_trait;
 use http::{Response, header};
 use pingora::{
     apps::http_app::ServeHttp, protocols::http::ServerSession, services::listening::Service,
 };
+use tokio::sync::mpsc::Sender;
 
 use crate::rinha_domain::Payment;
 
 pub struct RinhaHttp {
-    sender: Arc<broadcast::Sender<Payment>>,
+    sender: Arc<Sender<Payment>>,
 }
 
 impl RinhaHttp {
-    fn new(sender: broadcast::Sender<Payment>) -> Self {
+    fn new(sender: Sender<Payment>) -> Self {
         Self {
             sender: Arc::new(sender),
         }
@@ -30,11 +29,11 @@ impl ServeHttp for RinhaHttp {
         let empty: Vec<u8> = vec![];
 
         if header.method == "POST" && header.raw_path() == b"/payments" {
-            let sender = self.sender.clone();
+            let sender = Arc::clone(&self.sender);
             let body = http_session.read_request_body().await.unwrap().unwrap();
             let payment = serde_json::from_slice::<Payment>(&body).unwrap();
 
-            sender.send(payment).unwrap();
+            sender.send(payment).await.unwrap();
 
             return Response::builder()
                 .status(200)
@@ -51,6 +50,6 @@ impl ServeHttp for RinhaHttp {
     }
 }
 
-pub fn rinha_http_service(sender: broadcast::Sender<Payment>) -> Service<RinhaHttp> {
+pub fn rinha_http_service(sender: Sender<Payment>) -> Service<RinhaHttp> {
     Service::new("Rinha HTTP Service".to_string(), RinhaHttp::new(sender))
 }

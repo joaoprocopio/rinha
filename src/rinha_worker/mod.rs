@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pingora::services::background::{BackgroundService, GenBackgroundService};
-use tokio::sync::broadcast;
+use tokio::sync::mpsc::Receiver;
 
 use async_trait::async_trait;
 use pingora::server::ShutdownWatch;
@@ -9,11 +9,11 @@ use pingora::server::ShutdownWatch;
 use crate::rinha_domain::Payment;
 
 pub struct RinhaWorker {
-    receiver: broadcast::Receiver<Payment>,
+    receiver: Receiver<Payment>,
 }
 
 impl RinhaWorker {
-    fn new(receiver: broadcast::Receiver<Payment>) -> Self {
+    fn new(receiver: Receiver<Payment>) -> Self {
         Self { receiver: receiver }
     }
 }
@@ -21,7 +21,7 @@ impl RinhaWorker {
 #[async_trait]
 impl BackgroundService for RinhaWorker {
     async fn start(&self, mut shutdown: ShutdownWatch) {
-        let mut receiver = self.receiver.resubscribe();
+        let mut receiver = self.receiver;
 
         loop {
             tokio::select! {
@@ -29,7 +29,7 @@ impl BackgroundService for RinhaWorker {
                     break;
                 }
                 recv = receiver.recv() => {
-                    if let Ok(payment) = recv {
+                    if let Some(payment) = recv {
                         dbg!(payment);
                     } else {
                         break;
@@ -40,9 +40,7 @@ impl BackgroundService for RinhaWorker {
     }
 }
 
-pub fn rinha_worker_service(
-    receiver: broadcast::Receiver<Payment>,
-) -> GenBackgroundService<RinhaWorker> {
+pub fn rinha_worker_service(receiver: Receiver<Payment>) -> GenBackgroundService<RinhaWorker> {
     GenBackgroundService::new(
         "Rinha Background Service".to_string(),
         Arc::new(RinhaWorker::new(receiver)),

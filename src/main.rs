@@ -6,7 +6,7 @@ mod rinha_http;
 mod rinha_worker;
 
 use pingora::prelude::*;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc::channel;
 
 use crate::{
     rinha_domain::Payment, rinha_http::rinha_http_service, rinha_worker::rinha_worker_service,
@@ -16,10 +16,7 @@ fn main() {
     let mut server = Server::new(None).unwrap();
     server.bootstrap();
 
-    // NOTA: a solução com broadcast channels funciona por agora, mais se colocar mais de um worker, vai fuder o esquema.
-    // todos mundo que tiver ouvindo nesse receiver vai receber a struct,
-    // isso vai fazer a mesma struct ser processada N — sendo N o número de workers
-    let (sender, receiver) = broadcast::channel::<Payment>(size_of::<Payment>() * 100);
+    let (sender, receiver) = channel::<Payment>(size_of::<Payment>() * 100);
 
     let mut rinha_http = rinha_http_service(sender);
     rinha_http.add_tcp("0.0.0.0:9999");
