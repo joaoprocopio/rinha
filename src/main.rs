@@ -1,116 +1,12 @@
 #[global_allocator]
 static ALLOCATOR: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-use std::sync::Arc;
-
-use async_trait::async_trait;
-use http::{Response, header};
-use pingora::{
-    apps::http_app::ServeHttp,
-    prelude::*,
-    protocols::http::ServerSession,
-    server::ShutdownWatch,
-    services::{
-        background::{BackgroundService, GenBackgroundService},
-        listening::Service,
-    },
-};
-use serde::{Deserialize, Serialize};
+use pingora::prelude::*;
 use tokio::sync::broadcast;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct Payment {
-    #[serde(rename = "correlationId")]
-    correlation_id: String,
-    amount: f64,
-}
-
-struct Rinha {
-    sender: Arc<broadcast::Sender<Payment>>,
-}
-
-impl Rinha {
-    fn new(sender: broadcast::Sender<Payment>) -> Self {
-        Self {
-            sender: Arc::new(sender),
-        }
-    }
-}
-
-struct RinhaWorker {
-    receiver: broadcast::Receiver<Payment>,
-}
-
-impl RinhaWorker {
-    fn new(receiver: broadcast::Receiver<Payment>) -> Self {
-        Self { receiver: receiver }
-    }
-}
-
-#[async_trait]
-impl BackgroundService for RinhaWorker {
-    async fn start(&self, mut shutdown: ShutdownWatch) {
-        let mut receiver = self.receiver.resubscribe();
-
-        loop {
-            tokio::select! {
-                _ = shutdown.changed() => {
-                    break;
-                }
-                recv = receiver.recv() => {
-                    if let Ok(payment) = recv {
-                        dbg!(payment);
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[async_trait]
-impl ServeHttp for Rinha {
-    async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
-        let header = http_session.req_header();
-
-        let empty: Vec<u8> = vec![];
-
-        if header.method == "POST" && header.raw_path() == b"/payments" {
-            let sender = self.sender.clone();
-            let body = http_session.read_request_body().await.unwrap().unwrap();
-
-            sender
-                .send(serde_json::from_slice::<Payment>(&body).unwrap())
-                .unwrap();
-
-            return Response::builder()
-                .status(200)
-                .header(header::CONTENT_LENGTH, empty.len())
-                .body(empty)
-                .unwrap();
-        }
-
-        return Response::builder()
-            .status(404)
-            .header(header::CONTENT_LENGTH, empty.len())
-            .body(empty)
-            .unwrap();
-    }
-}
-
-fn rinha_service(sender: broadcast::Sender<Payment>) -> Service<Rinha> {
-    Service::new("Rinha HTTP Service".to_string(), Rinha::new(sender))
-}
-
-fn rinha_worker_service(
-    receiver: broadcast::Receiver<Payment>,
-) -> GenBackgroundService<RinhaWorker> {
-    GenBackgroundService::new(
-        "Rinha Background Service".to_string(),
-        Arc::new(RinhaWorker::new(receiver)),
-    )
-}
+mod rinha_domain;
+mod rinha_http;
+mod rinha_worker;
 
 fn main() {
     let mut server = Server::new(None).unwrap();
@@ -119,12 +15,13 @@ fn main() {
     // NOTA: a solução com broadcast channels funciona por agora, mais se colocar mais de um worker, vai fuder o esquema.
     // todos mundo que tiver ouvindo nesse receiver vai receber a struct,
     // isso vai fazer a mesma struct ser processada N — sendo N o número de workers
-    let (sender, receiver) = broadcast::channel::<Payment>(size_of::<Payment>() * 100);
+    let (sender, receiver) =
+        broadcast::channel::<rinha_domain::Payment>(size_of::<rinha_domain::Payment>() * 100);
 
-    let mut rinha = rinha_service(sender);
+    let mut rinha = rinha_http::rinha_service(sender);
     rinha.add_tcp("0.0.0.0:9999");
 
-    let rinha_worker = rinha_worker_service(receiver);
+    let rinha_worker = rinha_worker::rinha_worker_service(receiver);
 
     server.add_service(rinha);
     server.add_service(rinha_worker);
