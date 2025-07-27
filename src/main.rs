@@ -1,6 +1,7 @@
 #[global_allocator]
 static ALLOCATOR: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
+mod rinha_ambulance;
 mod rinha_domain;
 mod rinha_http;
 mod rinha_worker;

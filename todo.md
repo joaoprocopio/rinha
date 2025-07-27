@@ -4,3 +4,4 @@
 - [] fazer health checks
 - [] executar as requests para os servidores saudáveis, com peso 10 pro default e 1 pro fallback
 - [] guardar e retornar o summary quando pedido
+- [] trocar mpsc com aquela mutex maldita por watch channel
