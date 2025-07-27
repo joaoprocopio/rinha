@@ -1,9 +1,15 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use pingora::{
     http::ResponseHeader,
-    lb::{Backend, health_check::HttpHealthCheck},
+    lb::{
+        Backend,
+        health_check::{HealthCheck, HttpHealthCheck},
+    },
     server::ShutdownWatch,
     services::background::{BackgroundService, GenBackgroundService},
 };
@@ -20,34 +26,33 @@ impl RinhaAmbulance {
 #[async_trait]
 impl BackgroundService for RinhaAmbulance {
     async fn start(&self, mut shutdown: ShutdownWatch) {
-        let mut period = interval(Duration::from_secs(5));
+        let mut period = interval(Duration::from_millis(2500));
 
         loop {
             tokio::select! {
                 _ = shutdown.changed() => {
                     break;
                 }
-                tick = period.tick() => {
-                    dbg!(tick);
+                _ = period.tick() => {
+                    health_check().await;
                 }
             }
         }
     }
 }
 
-fn validator(header: &ResponseHeader) -> Result<(), Box<pingora::Error>> {
-    Ok(())
-}
+async fn health_check() {
+    let default_backend = Backend::new_with_weight("0.0.0.0:8001", 10).unwrap();
+    let fallback_backend = Backend::new_with_weight("0.0.0.0:8002", 1).unwrap();
 
-fn hc() {
     let mut hc = HttpHealthCheck::new("1.1.1.1", false);
+    hc.validator = Some(Box::new(|header: &ResponseHeader| {
+        dbg!(header);
 
-    let v = Box::new(validator);
+        Ok(())
+    }));
 
-    hc.validator = Some(Box::new(&validator));
-
-    let default_backend = Backend::new_with_weight("http://0.0.0.0:8001", 10).unwrap();
-    let fallback_backend = Backend::new_with_weight("http://0.0.0.0:8002", 1).unwrap();
+    let _ = tokio::join!(hc.check(&default_backend), hc.check(&fallback_backend));
 }
 
 pub fn rinha_ambulance_service() -> GenBackgroundService<RinhaAmbulance> {
