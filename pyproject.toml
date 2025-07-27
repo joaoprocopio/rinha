@@ -1,6 +1,8 @@
 [project]
-name = "scripts"
+name = "rinha"
 version = "0.0.1"
 description = ""
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "ipykernel>=6.30.0",
+]
