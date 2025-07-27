@@ -42,7 +42,7 @@ fn process_payment(payment: Payment) {
 
 pub fn rinha_worker_service(receiver: Receiver<Payment>) -> GenBackgroundService<RinhaWorker> {
     GenBackgroundService::new(
-        "Rinha Background Service".to_string(),
+        "Rinha Worker Background Service".to_string(),
         Arc::new(RinhaWorker::new(receiver)),
     )
 }
