@@ -10,3 +10,4 @@ jemallocator = "0.5.4"
 pingora = { version = "0.5.0" }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.141"
+tokio = "1.47.0"
