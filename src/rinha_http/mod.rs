@@ -32,10 +32,9 @@ impl ServeHttp for RinhaHttp {
         if header.method == "POST" && header.raw_path() == b"/payments" {
             let sender = self.sender.clone();
             let body = http_session.read_request_body().await.unwrap().unwrap();
+            let payment = serde_json::from_slice::<Payment>(&body).unwrap();
 
-            sender
-                .send(serde_json::from_slice::<Payment>(&body).unwrap())
-                .unwrap();
+            sender.send(payment).unwrap();
 
             return Response::builder()
                 .status(200)

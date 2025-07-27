@@ -3,6 +3,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Payment {
     #[serde(rename = "correlationId")]
-    correlation_id: String,
-    amount: f32,
+    pub correlation_id: String,
+    pub amount: f32,
 }
