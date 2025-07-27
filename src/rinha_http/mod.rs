@@ -1,6 +1,6 @@
 use crate::rinha_domain::Payment;
 use async_trait::async_trait;
-use http::{Method, Response, header};
+use http::{Response, header};
 use pingora::{
     apps::http_app::ServeHttp, protocols::http::ServerSession, services::listening::Service,
 };
