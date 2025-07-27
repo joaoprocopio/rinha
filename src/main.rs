@@ -4,7 +4,7 @@ static ALLOCATOR: jemallocator::Jemalloc = jemallocator::Jemalloc;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use http::Response;
+use http::{Response, header};
 use pingora::{
     apps::http_app::ServeHttp,
     prelude::*,
@@ -16,7 +16,7 @@ use pingora::{
     },
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Payment {
@@ -38,12 +38,14 @@ impl Rinha {
 }
 
 struct RinhaWorker {
-    receiver: mpsc::Receiver<Payment>,
+    receiver: Mutex<mpsc::Receiver<Payment>>,
 }
 
 impl RinhaWorker {
     fn new(receiver: mpsc::Receiver<Payment>) -> Self {
-        Self { receiver: receiver }
+        Self {
+            receiver: Mutex::new(receiver),
+        }
     }
 }
 
@@ -55,25 +57,18 @@ impl BackgroundService for RinhaWorker {
                 _ = shutdown.changed() => {
                     break;
                 }
-                recv = self.receiver.recv() => {
+                recv = async {
+                    let mut locked = self.receiver.lock().await;
+                    locked.recv().await
+                } => {
                     if let Some(payment) = recv {
                         dbg!(payment);
+                    } else {
+                        break;
                     }
                 }
             }
         }
-    }
-}
-
-impl Rinha {
-    async fn payments(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
-        let sender = self.sender.clone();
-        let body = http_session.read_request_body().await.unwrap().unwrap();
-        let payment = serde_json::from_slice::<Payment>(&body).unwrap();
-
-        sender.send(payment).await.unwrap();
-
-        Response::builder().status(200).body(vec![]).unwrap()
     }
 }
 
@@ -83,10 +78,26 @@ impl ServeHttp for Rinha {
         let header = http_session.req_header();
 
         if header.method == "POST" && header.raw_path() == b"/payments" {
-            self.payments(http_session).await
-        } else {
-            todo!()
+            let sender = self.sender.clone();
+            let body = http_session.read_request_body().await.unwrap().unwrap();
+
+            sender
+                .send(serde_json::from_slice::<Payment>(&body).unwrap())
+                .await
+                .unwrap();
+
+            return Response::builder()
+                .status(200)
+                .header(header::CONTENT_LENGTH, 0)
+                .body(vec![])
+                .unwrap();
         }
+
+        return Response::builder()
+            .status(404)
+            .header(header::CONTENT_LENGTH, 0)
+            .body(vec![])
+            .unwrap();
     }
 }
 
@@ -115,5 +126,5 @@ fn main() {
     server.add_service(rinha);
     server.add_service(rinha_worker);
 
-    server.run_forever()
+    server.run_forever();
 }
