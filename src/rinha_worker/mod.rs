@@ -24,14 +24,14 @@ impl RinhaWorker {
 #[async_trait]
 impl BackgroundService for RinhaWorker {
     async fn start(&self, mut shutdown: ShutdownWatch) {
+        let mut receiver = self.receiver.lock().await;
+
         loop {
             tokio::select! {
                 _ = shutdown.changed() => {
                     break;
                 }
-                recv = async {
-                    self.receiver.lock().await.recv().await
-                } => {
+                recv = receiver.recv() => {
                     if let Some(payment) = recv {
                         dbg!(payment);
                     } else {
