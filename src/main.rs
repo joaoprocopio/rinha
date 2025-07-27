@@ -20,19 +20,32 @@ struct Payment<'a> {
 
 struct Rinha;
 
+async fn payments(http_session: &mut ServerSession) -> Response<Vec<u8>> {
+    let body = http_session.read_request_body().await.unwrap().unwrap();
+    let payment = serde_json::from_slice::<Payment>(&body).unwrap();
+    let response = serde_json::to_vec(&payment).unwrap();
+
+    Response::builder()
+        .status(200)
+        .header(http::header::CONTENT_TYPE, JSON_FORMAT)
+        .header(http::header::CONTENT_LENGTH, response.len())
+        .body(response)
+        .unwrap()
+}
+
 #[async_trait]
 impl ServeHttp for Rinha {
     async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
-        let body = http_session.read_request_body().await.unwrap().unwrap();
-        let payment = serde_json::from_slice::<Payment>(&body).unwrap();
-        let response = serde_json::to_vec(&payment).unwrap();
+        let header = http_session.req_header();
+        dbg!(header);
+        dbg!(header.method.to_owned());
+        dbg!(header.raw_path());
 
-        Response::builder()
-            .status(200)
-            .header(http::header::CONTENT_TYPE, JSON_FORMAT)
-            .header(http::header::CONTENT_LENGTH, response.len())
-            .body(response)
-            .unwrap()
+        if header.method == "POST" && header.raw_path() == b"/payments" {
+            payments(http_session).await
+        } else {
+            todo!()
+        }
     }
 }
 
