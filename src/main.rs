@@ -116,6 +116,9 @@ fn main() {
     let mut server = Server::new(None).unwrap();
     server.bootstrap();
 
+    // NOTA: a solução com broadcast channels funciona por agora, mais se colocar mais de um worker, vai fuder o esquema.
+    // todos mundo que tiver ouvindo nesse receiver vai receber a struct,
+    // isso vai fazer a mesma struct ser processada N — sendo N o número de workers
     let (sender, receiver) = broadcast::channel::<Payment>(size_of::<Payment>() * 100);
 
     let mut rinha = rinha_service(sender);
