@@ -1,6 +1,6 @@
 use crate::rinha_domain::Payment;
 use async_trait::async_trait;
-use http::{Response, header};
+use http::{Method, Response, header};
 use pingora::{
     apps::http_app::ServeHttp, protocols::http::ServerSession, services::listening::Service,
 };
@@ -27,25 +27,26 @@ impl ServeHttp for RinhaHttp {
         let empty: Vec<u8> = vec![];
         let empty_len: usize = empty.len();
 
-        if header.method == "POST" && header.raw_path() == b"/payments" {
-            let sender = Arc::clone(&self.sender);
-            let body = http_session.read_request_body().await.unwrap().unwrap();
-            let payment = serde_json::from_slice::<Payment>(&body).unwrap();
+        match (header.method.as_str(), header.raw_path()) {
+            ("POST", b"/payments") => {
+                let sender = Arc::clone(&self.sender);
+                let body = http_session.read_request_body().await.unwrap().unwrap();
+                let payment = serde_json::from_slice::<Payment>(&body).unwrap();
 
-            sender.send(payment).await.unwrap();
+                sender.send(payment).await.unwrap();
 
-            return Response::builder()
-                .status(200)
+                Response::builder()
+                    .status(200)
+                    .header(header::CONTENT_LENGTH, empty_len)
+                    .body(empty)
+                    .unwrap()
+            }
+            _ => Response::builder()
+                .status(404)
                 .header(header::CONTENT_LENGTH, empty_len)
                 .body(empty)
-                .unwrap();
+                .unwrap(),
         }
-
-        return Response::builder()
-            .status(404)
-            .header(header::CONTENT_LENGTH, empty_len)
-            .body(empty)
-            .unwrap();
     }
 }
 

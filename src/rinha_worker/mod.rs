@@ -28,16 +28,16 @@ impl BackgroundService for RinhaWorker {
                 _ = shutdown.changed() => {
                     break;
                 }
-                recv = receiver.recv() => {
-                    if let Some(payment) = recv {
-                        dbg!(payment);
-                    } else {
-                        break;
-                    }
+                Some(payment) = receiver.recv() => {
+                    process_payment(payment);
                 }
             }
         }
     }
+}
+
+fn process_payment(payment: Payment) {
+    dbg!(payment);
 }
 
 pub fn rinha_worker_service(receiver: Receiver<Payment>) -> GenBackgroundService<RinhaWorker> {
