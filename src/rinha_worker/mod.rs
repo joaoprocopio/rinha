@@ -6,6 +6,8 @@ use tokio::sync::broadcast;
 use async_trait::async_trait;
 use pingora::server::ShutdownWatch;
 
+use crate::rinha_domain::Payment;
+
 struct RinhaWorker {
     receiver: broadcast::Receiver<Payment>,
 }

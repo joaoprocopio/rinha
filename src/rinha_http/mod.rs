@@ -8,6 +8,8 @@ use pingora::{
     apps::http_app::ServeHttp, protocols::http::ServerSession, services::listening::Service,
 };
 
+use crate::rinha_domain::Payment;
+
 struct Rinha {
     sender: Arc<broadcast::Sender<Payment>>,
 }
