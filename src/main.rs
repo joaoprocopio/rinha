@@ -77,6 +77,8 @@ impl ServeHttp for Rinha {
     async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
         let header = http_session.req_header();
 
+        let empty: Vec<u8> = vec![];
+
         if header.method == "POST" && header.raw_path() == b"/payments" {
             let sender = self.sender.clone();
             let body = http_session.read_request_body().await.unwrap().unwrap();
@@ -88,15 +90,15 @@ impl ServeHttp for Rinha {
 
             return Response::builder()
                 .status(200)
-                .header(header::CONTENT_LENGTH, 0)
-                .body(vec![])
+                .header(header::CONTENT_LENGTH, empty.len())
+                .body(empty)
                 .unwrap();
         }
 
         return Response::builder()
             .status(404)
-            .header(header::CONTENT_LENGTH, 0)
-            .body(vec![])
+            .header(header::CONTENT_LENGTH, empty.len())
+            .body(empty)
             .unwrap();
     }
 }
