@@ -7,21 +7,29 @@ use pingora::{
     apps::http_app::ServeHttp, prelude::*, protocols::http::ServerSession,
     services::listening::Service,
 };
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Payment<'a> {
+    #[serde(rename = "correlationId")]
+    correlation_id: &'a str,
+    amount: f64,
+}
 
 struct Rinha;
 
 #[async_trait]
 impl ServeHttp for Rinha {
     async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
-        let text = "Hello, world!";
-        println!("{:?}", http_session.req_header());
-        let buf = text.as_bytes().to_vec();
+        let body: &[u8] = &http_session.read_request_body().await.unwrap().unwrap()[..];
+        let payment = serde_json::from_slice::<Payment>(body).unwrap();
+        let response = serde_json::to_vec(&payment).unwrap();
 
         Response::builder()
             .status(200)
-            .header(http::header::CONTENT_TYPE, "text/plain")
-            .header(http::header::CONTENT_LENGTH, buf.len())
-            .body(buf)
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .header(http::header::CONTENT_LENGTH, response.len())
+            .body(response)
             .unwrap()
     }
 }
