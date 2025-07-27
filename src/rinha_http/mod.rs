@@ -27,6 +27,7 @@ impl ServeHttp for RinhaHttp {
         let header = http_session.req_header();
 
         let empty: Vec<u8> = vec![];
+        let empty_len: usize = empty.len();
 
         if header.method == "POST" && header.raw_path() == b"/payments" {
             let sender = Arc::clone(&self.sender);
@@ -37,14 +38,14 @@ impl ServeHttp for RinhaHttp {
 
             return Response::builder()
                 .status(200)
-                .header(header::CONTENT_LENGTH, empty.len())
+                .header(header::CONTENT_LENGTH, empty_len)
                 .body(empty)
                 .unwrap();
         }
 
         return Response::builder()
             .status(404)
-            .header(header::CONTENT_LENGTH, empty.len())
+            .header(header::CONTENT_LENGTH, empty_len)
             .body(empty)
             .unwrap();
     }
