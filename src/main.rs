@@ -60,6 +60,8 @@ impl BackgroundService for RinhaWorker {
                 recv = receiver.recv() => {
                     if let Ok(payment) = recv {
                         dbg!(payment);
+                    } else {
+                        break;
                     }
                 }
             }
