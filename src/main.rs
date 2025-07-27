@@ -16,9 +16,9 @@ use pingora::{
     },
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::broadcast;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Payment {
     #[serde(rename = "correlationId")]
     correlation_id: String,
@@ -26,11 +26,11 @@ struct Payment {
 }
 
 struct Rinha {
-    sender: Arc<mpsc::Sender<Payment>>,
+    sender: Arc<broadcast::Sender<Payment>>,
 }
 
 impl Rinha {
-    fn new(sender: mpsc::Sender<Payment>) -> Self {
+    fn new(sender: broadcast::Sender<Payment>) -> Self {
         Self {
             sender: Arc::new(sender),
         }
@@ -38,33 +38,28 @@ impl Rinha {
 }
 
 struct RinhaWorker {
-    receiver: Mutex<mpsc::Receiver<Payment>>,
+    receiver: broadcast::Receiver<Payment>,
 }
 
 impl RinhaWorker {
-    fn new(receiver: mpsc::Receiver<Payment>) -> Self {
-        Self {
-            receiver: Mutex::new(receiver),
-        }
+    fn new(receiver: broadcast::Receiver<Payment>) -> Self {
+        Self { receiver: receiver }
     }
 }
 
 #[async_trait]
 impl BackgroundService for RinhaWorker {
     async fn start(&self, mut shutdown: ShutdownWatch) {
+        let mut receiver = self.receiver.resubscribe();
+
         loop {
             tokio::select! {
                 _ = shutdown.changed() => {
                     break;
                 }
-                recv = async {
-                    let mut locked = self.receiver.lock().await;
-                    locked.recv().await
-                } => {
-                    if let Some(payment) = recv {
+                recv = receiver.recv() => {
+                    if let Ok(payment) = recv {
                         dbg!(payment);
-                    } else {
-                        break;
                     }
                 }
             }
@@ -85,7 +80,6 @@ impl ServeHttp for Rinha {
 
             sender
                 .send(serde_json::from_slice::<Payment>(&body).unwrap())
-                .await
                 .unwrap();
 
             return Response::builder()
@@ -103,11 +97,13 @@ impl ServeHttp for Rinha {
     }
 }
 
-fn rinha_service(sender: mpsc::Sender<Payment>) -> Service<Rinha> {
+fn rinha_service(sender: broadcast::Sender<Payment>) -> Service<Rinha> {
     Service::new("Rinha HTTP Service".to_string(), Rinha::new(sender))
 }
 
-fn rinha_worker_service(receiver: mpsc::Receiver<Payment>) -> GenBackgroundService<RinhaWorker> {
+fn rinha_worker_service(
+    receiver: broadcast::Receiver<Payment>,
+) -> GenBackgroundService<RinhaWorker> {
     GenBackgroundService::new(
         "Rinha Background Service".to_string(),
         Arc::new(RinhaWorker::new(receiver)),
@@ -118,7 +114,7 @@ fn main() {
     let mut server = Server::new(None).unwrap();
     server.bootstrap();
 
-    let (sender, receiver) = mpsc::channel::<Payment>(size_of::<Payment>() * 100);
+    let (sender, receiver) = broadcast::channel::<Payment>(size_of::<Payment>() * 100);
 
     let mut rinha = rinha_service(sender);
     rinha.add_tcp("0.0.0.0:9999");
