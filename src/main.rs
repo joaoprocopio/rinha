@@ -1,12 +1,14 @@
 #[global_allocator]
 static ALLOCATOR: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-use pingora::prelude::*;
-use tokio::sync::broadcast;
-
 mod rinha_domain;
 mod rinha_http;
 mod rinha_worker;
+
+use pingora::prelude::*;
+use tokio::sync::broadcast;
+
+use crate::{rinha_domain::Payment, rinha_http::rinha_service, rinha_worker::rinha_worker_service};
 
 fn main() {
     let mut server = Server::new(None).unwrap();

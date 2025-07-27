@@ -4,5 +4,5 @@ use serde::{Deserialize, Serialize};
 pub struct Payment {
     #[serde(rename = "correlationId")]
     correlation_id: String,
-    amount: f64,
+    amount: f32,
 }

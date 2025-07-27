@@ -8,7 +8,7 @@ use pingora::server::ShutdownWatch;
 
 use crate::rinha_domain::Payment;
 
-struct RinhaWorker {
+pub struct RinhaWorker {
     receiver: broadcast::Receiver<Payment>,
 }
 

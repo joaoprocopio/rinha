@@ -10,7 +10,7 @@ use pingora::{
 
 use crate::rinha_domain::Payment;
 
-struct Rinha {
+pub struct Rinha {
     sender: Arc<broadcast::Sender<Payment>>,
 }
 
