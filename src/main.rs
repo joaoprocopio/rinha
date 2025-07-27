@@ -5,12 +5,11 @@ mod rinha_domain;
 mod rinha_http;
 mod rinha_worker;
 
-use pingora::prelude::*;
-use tokio::sync::mpsc::channel;
-
 use crate::{
     rinha_domain::Payment, rinha_http::rinha_http_service, rinha_worker::rinha_worker_service,
 };
+use pingora::prelude::*;
+use tokio::sync::mpsc::channel;
 
 fn main() {
     let mut server = Server::new(None).unwrap();

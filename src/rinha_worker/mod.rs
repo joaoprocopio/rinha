@@ -1,13 +1,10 @@
-use std::sync::Arc;
-
-use pingora::services::background::{BackgroundService, GenBackgroundService};
-use tokio::sync::Mutex;
-use tokio::sync::mpsc::Receiver;
-
+use crate::rinha_domain::Payment;
 use async_trait::async_trait;
 use pingora::server::ShutdownWatch;
-
-use crate::rinha_domain::Payment;
+use pingora::services::background::{BackgroundService, GenBackgroundService};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::sync::mpsc::Receiver;
 
 pub struct RinhaWorker {
     receiver: Mutex<Receiver<Payment>>,

@@ -1,13 +1,11 @@
-use std::sync::Arc;
-
+use crate::rinha_domain::Payment;
 use async_trait::async_trait;
 use http::{Response, header};
 use pingora::{
     apps::http_app::ServeHttp, protocols::http::ServerSession, services::listening::Service,
 };
+use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
-
-use crate::rinha_domain::Payment;
 
 pub struct RinhaHttp {
     sender: Arc<Sender<Payment>>,
