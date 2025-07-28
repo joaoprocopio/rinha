@@ -34,7 +34,7 @@ impl RinhaWorker {
         let connector = Connector::new(None);
         let (mut http, _) = connector.get_http_session(&peer).await.unwrap();
 
-        let payment = serde_json::ser::to_vec(&payment).unwrap();
+        let payment_ser = serde_json::ser::to_vec(&payment).unwrap();
 
         let mut request_header = RequestHeader::build(Method::POST, b"/payments", None).unwrap();
 
@@ -42,7 +42,7 @@ impl RinhaWorker {
             .append_header(header::HOST, "0.0.0.0:9999")
             .unwrap();
         request_header
-            .append_header(header::CONTENT_LENGTH, payment.len())
+            .append_header(header::CONTENT_LENGTH, payment_ser.len())
             .unwrap();
         request_header
             .append_header(header::CONTENT_TYPE, "application/json")
@@ -51,7 +51,9 @@ impl RinhaWorker {
         http.write_request_header(Box::new(request_header))
             .await
             .unwrap();
-        http.write_request_body(payment.into(), true).await.unwrap();
+        http.write_request_body(payment_ser.into(), true)
+            .await
+            .unwrap();
         http.finish_request_body().await.unwrap();
         http.read_response_header().await.unwrap();
 
