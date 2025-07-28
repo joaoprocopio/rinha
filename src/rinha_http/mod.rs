@@ -51,5 +51,8 @@ impl ServeHttp for RinhaHttp {
 }
 
 pub fn rinha_http_service(sender: Sender<Payment>) -> Service<RinhaHttp> {
-    Service::new("Rinha HTTP Service".to_string(), RinhaHttp::new(sender))
+    let mut http_service = Service::new("Rinha HTTP Service".to_string(), RinhaHttp::new(sender));
+    http_service.add_tcp("0.0.0.0:9999");
+
+    http_service
 }

@@ -19,11 +19,9 @@ fn main() {
 
     let (sender, receiver) = channel::<Payment>(size_of::<Payment>() * 100);
 
-    let mut rinha_http = rinha_http_service(sender);
-    rinha_http.add_tcp("0.0.0.0:9999");
-
-    let rinha_worker = rinha_worker_service(receiver);
     let rinha_load_balancer = rinha_load_balancer_service();
+    let rinha_http = rinha_http_service(sender);
+    let rinha_worker = rinha_worker_service(receiver, rinha_load_balancer.task());
 
     server.add_service(rinha_http);
     server.add_service(rinha_worker);
