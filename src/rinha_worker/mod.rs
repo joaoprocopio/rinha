@@ -39,7 +39,7 @@ impl RinhaWorker {
         let mut request_header = RequestHeader::build(Method::POST, b"/payments", None).unwrap();
 
         request_header
-            .append_header(header::HOST, "0.0.0.0:9999")
+            .append_header(header::HOST, "0.0.0.0")
             .unwrap();
         request_header
             .append_header(header::CONTENT_LENGTH, payment_ser.len())
