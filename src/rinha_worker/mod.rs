@@ -1,7 +1,7 @@
 use crate::rinha_domain::Payment;
 use async_trait::async_trait;
 use pingora::lb::LoadBalancer;
-use pingora::lb::selection::Consistent;
+use pingora::prelude::RoundRobin;
 use pingora::server::ShutdownWatch;
 use pingora::services::background::{BackgroundService, GenBackgroundService};
 use std::sync::Arc;
@@ -10,11 +10,11 @@ use tokio::sync::mpsc::Receiver;
 
 pub struct RinhaWorker {
     receiver: Mutex<Receiver<Payment>>,
-    load_balancer: Arc<LoadBalancer<Consistent>>,
+    load_balancer: Arc<LoadBalancer<RoundRobin>>,
 }
 
 impl RinhaWorker {
-    fn new(receiver: Receiver<Payment>, load_balancer: Arc<LoadBalancer<Consistent>>) -> Self {
+    fn new(receiver: Receiver<Payment>, load_balancer: Arc<LoadBalancer<RoundRobin>>) -> Self {
         Self {
             receiver: Mutex::new(receiver),
             load_balancer: load_balancer,
@@ -23,8 +23,10 @@ impl RinhaWorker {
 }
 
 impl RinhaWorker {
-    fn process_payment(&self, payment: Payment) {
-        dbg!(payment);
+    async fn process_payment(&self, payment: Payment) {
+        let load_balancer = Arc::clone(&self.load_balancer);
+
+        dbg!(payment, load_balancer.select(b"", 256));
     }
 }
 
@@ -39,7 +41,7 @@ impl BackgroundService for RinhaWorker {
                     break;
                 }
                 Some(payment) = receiver.recv() => {
-                    self.process_payment(payment);
+                    self.process_payment(payment).await;
                 }
             }
         }
@@ -48,7 +50,7 @@ impl BackgroundService for RinhaWorker {
 
 pub fn rinha_worker_service(
     receiver: Receiver<Payment>,
-    load_balancer: Arc<LoadBalancer<Consistent>>,
+    load_balancer: Arc<LoadBalancer<RoundRobin>>,
 ) -> GenBackgroundService<RinhaWorker> {
     GenBackgroundService::new(
         "Rinha Worker Background Service".to_string(),

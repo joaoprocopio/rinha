@@ -1,10 +1,8 @@
 use http::{StatusCode, Uri};
 use pingora::{
     http::ResponseHeader,
-    lb::{
-        Backend, Backends, LoadBalancer, discovery, health_check::HttpHealthCheck,
-        selection::Consistent,
-    },
+    lb::{Backend, Backends, LoadBalancer, discovery, health_check::HttpHealthCheck},
+    prelude::RoundRobin,
     services::background::GenBackgroundService,
 };
 use std::{collections::BTreeSet, str::FromStr, sync::Arc, time::Duration};
@@ -32,14 +30,14 @@ fn http_health_check() -> HttpHealthCheck {
     health_checker
 }
 
-pub fn rinha_load_balancer_service() -> GenBackgroundService<LoadBalancer<Consistent>> {
+pub fn rinha_load_balancer_service() -> GenBackgroundService<LoadBalancer<RoundRobin>> {
     let discovery = discovery::Static::new(BTreeSet::from([
         Backend::new_with_weight("0.0.0.0:8001", 10).unwrap(),
         Backend::new_with_weight("0.0.0.0:8002", 1).unwrap(),
     ]));
     let backends = Backends::new(discovery);
 
-    let mut load_balancer = LoadBalancer::<Consistent>::from_backends(backends);
+    let mut load_balancer = LoadBalancer::<RoundRobin>::from_backends(backends);
 
     load_balancer.set_health_check(Box::new(http_health_check()));
     load_balancer.health_check_frequency = Some(Duration::from_secs(5));
