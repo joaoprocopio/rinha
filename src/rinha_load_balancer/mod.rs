@@ -1,24 +1,23 @@
-use http::{StatusCode, Uri};
+use http::Uri;
 use pingora::{
     http::ResponseHeader,
     lb::{Backend, Backends, LoadBalancer, discovery, health_check::HttpHealthCheck},
     prelude::RoundRobin,
     services::background::GenBackgroundService,
 };
-use std::{collections::BTreeSet, str::FromStr, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 fn http_health_check() -> HttpHealthCheck {
     let mut health_checker = HttpHealthCheck::new("0.0.0.0", false);
 
     health_checker
         .req
-        .set_uri(Uri::from_str("/payments/service-health").unwrap());
+        .set_uri(Uri::from_static("/payments/service-health"));
 
     health_checker.validator = Some(Box::new(|header: &ResponseHeader| {
-        //
-        match header.status {
-            StatusCode::OK => Ok(()),
-            _ => Err(pingora::Error::create(
+        match header.status.is_success() {
+            true => Ok(()),
+            false => Err(pingora::Error::create(
                 pingora::ErrorType::ConnectError,
                 pingora::ErrorSource::Upstream,
                 None,
@@ -37,15 +36,15 @@ pub fn rinha_load_balancer_service() -> GenBackgroundService<LoadBalancer<RoundR
     ]));
     let backends = Backends::new(discovery);
 
-    let mut load_balancer = LoadBalancer::<RoundRobin>::from_backends(backends);
+    let mut upstreams = LoadBalancer::<RoundRobin>::from_backends(backends);
 
-    load_balancer.set_health_check(Box::new(http_health_check()));
-    load_balancer.health_check_frequency = Some(Duration::from_secs(5));
-    load_balancer.parallel_health_check = true;
-    load_balancer.update_frequency = None;
+    upstreams.set_health_check(Box::new(http_health_check()));
+    upstreams.health_check_frequency = Some(Duration::from_secs(5));
+    upstreams.parallel_health_check = true;
+    upstreams.update_frequency = None;
 
     GenBackgroundService::new(
         "Rinha Worker Background Service".to_string(),
-        Arc::new(load_balancer),
+        Arc::new(upstreams),
     )
 }
