@@ -1,4 +1,3 @@
-use futures::FutureExt;
 use http::{StatusCode, Uri};
 use pingora::{
     http::ResponseHeader,
@@ -17,14 +16,17 @@ fn http_health_check() -> HttpHealthCheck {
         .req
         .set_uri(Uri::from_str("/payments/service-health").unwrap());
 
-    health_checker.validator = Some(Box::new(|header: &ResponseHeader| match header.status {
-        StatusCode::OK => Ok(()),
-        _ => Err(pingora::Error::create(
-            pingora::ErrorType::ConnectError,
-            pingora::ErrorSource::Upstream,
-            None,
-            None,
-        )),
+    health_checker.validator = Some(Box::new(|header: &ResponseHeader| {
+        //
+        match header.status {
+            StatusCode::OK => Ok(()),
+            _ => Err(pingora::Error::create(
+                pingora::ErrorType::ConnectError,
+                pingora::ErrorSource::Upstream,
+                None,
+                None,
+            )),
+        }
     }));
 
     health_checker
@@ -39,12 +41,10 @@ pub fn rinha_load_balancer_service() -> GenBackgroundService<LoadBalancer<Consis
 
     let mut load_balancer = LoadBalancer::<Consistent>::from_backends(backends);
 
-    load_balancer.update().now_or_never().unwrap().unwrap();
-
     load_balancer.set_health_check(Box::new(http_health_check()));
-    load_balancer.update_frequency = None;
     load_balancer.health_check_frequency = Some(Duration::from_secs(5));
     load_balancer.parallel_health_check = true;
+    load_balancer.update_frequency = None;
 
     GenBackgroundService::new(
         "Rinha Worker Background Service".to_string(),
