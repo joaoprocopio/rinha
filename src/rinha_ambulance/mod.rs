@@ -1,9 +1,7 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
-
 use async_trait::async_trait;
-use http::{StatusCode, Uri, Version};
+use http::{StatusCode, Uri};
 use pingora::{
-    http::{RequestHeader, ResponseHeader},
+    http::ResponseHeader,
     lb::{
         Backend,
         health_check::{HealthCheck, HttpHealthCheck},
@@ -11,6 +9,7 @@ use pingora::{
     server::ShutdownWatch,
     services::background::{BackgroundService, GenBackgroundService},
 };
+use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::time::interval;
 
 pub struct RinhaAmbulance;
@@ -24,7 +23,7 @@ impl RinhaAmbulance {
 #[async_trait]
 impl BackgroundService for RinhaAmbulance {
     async fn start(&self, mut shutdown: ShutdownWatch) {
-        let mut period = interval(Duration::from_millis(5000));
+        let mut period = interval(Duration::from_secs(5));
 
         loop {
             tokio::select! {
@@ -59,11 +58,10 @@ async fn health_check() {
         )),
     }));
 
-    let res = tokio::join!(
+    let _ = tokio::join!(
         checker.check(&default_backend),
         checker.check(&fallback_backend)
     );
-    dbg!(res);
 }
 
 pub fn rinha_ambulance_service() -> GenBackgroundService<RinhaAmbulance> {
