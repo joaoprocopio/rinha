@@ -2,9 +2,12 @@ use crate::{rinha_domain::Payment, rinha_worker::TARGET_COUNTER};
 use async_trait::async_trait;
 use http::{Response, StatusCode, header};
 use pingora::{
-    apps::http_app::ServeHttp, protocols::http::ServerSession, services::listening::Service,
+    apps::http_app::ServeHttp,
+    listeners::TcpSocketOptions,
+    protocols::{TcpKeepalive, http::ServerSession},
+    services::listening::Service,
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc::Sender;
 
 pub struct RinhaHttp {
@@ -63,7 +66,17 @@ impl ServeHttp for RinhaHttp {
 
 pub fn rinha_http_service(sender: Sender<Payment>) -> Service<RinhaHttp> {
     let mut http_service = Service::new("Rinha HTTP Service".into(), RinhaHttp::new(sender));
-    http_service.add_tcp("0.0.0.0:9999");
+    let mut socket_options = TcpSocketOptions::default();
+    socket_options.tcp_fastopen = Some(10);
+    socket_options.tcp_keepalive = Some(TcpKeepalive {
+        idle: Duration::from_secs(60),
+        interval: Duration::from_secs(5),
+        count: 5,
+        #[cfg(target_os = "linux")]
+        user_timeout: Duration::from_secs(85),
+    });
+
+    http_service.add_tcp_with_settings("0.0.0.0:9999", socket_options);
 
     http_service
 }
