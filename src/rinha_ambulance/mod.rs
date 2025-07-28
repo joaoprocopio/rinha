@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
+use http::StatusCode;
 use pingora::{
     http::{RequestHeader, ResponseHeader},
     lb::{
@@ -46,17 +47,14 @@ async fn health_check() {
 
     hc.req = RequestHeader::build("GET", b"/payments/service-health", None).unwrap();
 
-    hc.validator = Some(Box::new(|header: &ResponseHeader| {
-        if header.status == 200 {
-            Ok(())
-        } else {
-            Err(pingora::Error::create(
-                pingora::ErrorType::ConnectError,
-                pingora::ErrorSource::Upstream,
-                None,
-                None,
-            ))
-        }
+    hc.validator = Some(Box::new(|header: &ResponseHeader| match header.status {
+        StatusCode::OK => Ok(()),
+        _ => Err(pingora::Error::create(
+            pingora::ErrorType::ConnectError,
+            pingora::ErrorSource::Upstream,
+            None,
+            None,
+        )),
     }));
 
     let _ = tokio::join!(hc.check(&default_backend), hc.check(&fallback_backend));
