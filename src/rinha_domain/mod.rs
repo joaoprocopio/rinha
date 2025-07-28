@@ -1,5 +1,3 @@
-use std::u64;
-
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -13,6 +11,7 @@ pub enum Target {
 pub struct Payment {
     #[serde(rename = "correlationId")]
     pub correlation_id: Uuid,
+    #[serde(rename = "amount")]
     pub amount: f32,
 }
 
