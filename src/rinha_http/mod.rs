@@ -45,7 +45,7 @@ impl ServeHttp for RinhaHttp {
                     .unwrap()
             }
             ("GET", b"/payments-summary") => {
-                let target_counter = TARGET_COUNTER.read().await;
+                let target_counter = TARGET_COUNTER.read();
                 let target_count = serde_json::ser::to_vec(&*target_counter).unwrap();
 
                 Response::builder()

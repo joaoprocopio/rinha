@@ -1,29 +1,28 @@
 use crate::rinha_domain::{Payment, Target, TargetCounter};
 use async_trait::async_trait;
 use http::{Method, header};
-use once_cell::sync::Lazy;
+use parking_lot::RwLock;
 use pingora::connectors::http::Connector;
 use pingora::http::RequestHeader;
 use pingora::lb::LoadBalancer;
 use pingora::prelude::{HttpPeer, RoundRobin};
 use pingora::server::ShutdownWatch;
 use pingora::services::background::{BackgroundService, GenBackgroundService};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{Mutex, RwLock};
 
-pub static TARGET_COUNTER: Lazy<RwLock<TargetCounter>> =
-    Lazy::new(|| RwLock::new(TargetCounter::default()));
+pub static TARGET_COUNTER: LazyLock<RwLock<TargetCounter>> =
+    LazyLock::new(|| RwLock::new(TargetCounter::default()));
 
 pub struct RinhaWorker {
-    receiver: Mutex<Receiver<Payment>>,
+    receiver: RwLock<Receiver<Payment>>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
 }
 
 impl RinhaWorker {
     fn new(receiver: Receiver<Payment>, load_balancer: Arc<LoadBalancer<RoundRobin>>) -> Self {
         Self {
-            receiver: Mutex::new(receiver),
+            receiver: RwLock::new(receiver),
             load_balancer: load_balancer,
         }
     }
@@ -66,12 +65,12 @@ impl RinhaWorker {
 
         match (target, response_header.status.is_success()) {
             (Target::Default, true) => {
-                let mut counter = TARGET_COUNTER.write().await;
+                let mut counter = TARGET_COUNTER.write();
                 counter.default.requests += 1;
                 counter.default.amount += payment.amount;
             }
             (Target::Fallback, true) => {
-                let mut counter = TARGET_COUNTER.write().await;
+                let mut counter = TARGET_COUNTER.write();
                 counter.fallback.requests += 1;
                 counter.fallback.amount += payment.amount;
             }
@@ -83,8 +82,6 @@ impl RinhaWorker {
 #[async_trait]
 impl BackgroundService for RinhaWorker {
     async fn start(&self, mut shutdown: ShutdownWatch) {
-        let mut receiver = self.receiver.lock().await;
-
         loop {
             tokio::select! {
                 _ = shutdown.changed() => {
