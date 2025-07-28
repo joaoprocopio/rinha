@@ -1,7 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use http::StatusCode;
+use http::{StatusCode, Uri, Version};
 use pingora::{
     http::{RequestHeader, ResponseHeader},
     lb::{
@@ -43,11 +43,13 @@ async fn health_check() {
     let default_backend = Backend::new_with_weight("0.0.0.0:8001", 10).unwrap();
     let fallback_backend = Backend::new_with_weight("0.0.0.0:8002", 1).unwrap();
 
-    let mut hc = HttpHealthCheck::new("1.1.1.1", false);
+    let mut checker = HttpHealthCheck::new("0.0.0.0", false);
 
-    hc.req = RequestHeader::build("GET", b"/payments/service-health", None).unwrap();
+    checker
+        .req
+        .set_uri(Uri::from_str("/payments/service-health").unwrap());
 
-    hc.validator = Some(Box::new(|header: &ResponseHeader| match header.status {
+    checker.validator = Some(Box::new(|header: &ResponseHeader| match header.status {
         StatusCode::OK => Ok(()),
         _ => Err(pingora::Error::create(
             pingora::ErrorType::ConnectError,
@@ -57,7 +59,11 @@ async fn health_check() {
         )),
     }));
 
-    let _ = tokio::join!(hc.check(&default_backend), hc.check(&fallback_backend));
+    let res = tokio::join!(
+        checker.check(&default_backend),
+        checker.check(&fallback_backend)
+    );
+    dbg!(res);
 }
 
 pub fn rinha_ambulance_service() -> GenBackgroundService<RinhaAmbulance> {
