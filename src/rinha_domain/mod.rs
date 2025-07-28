@@ -5,5 +5,5 @@ use uuid::Uuid;
 pub struct Payment {
     #[serde(rename = "correlationId")]
     pub correlation_id: Uuid,
-    pub amount: f32,
+    pub amount: f64,
 }

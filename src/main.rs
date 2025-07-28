@@ -17,7 +17,7 @@ fn main() {
     let mut server = Server::new(None).unwrap();
     server.bootstrap();
 
-    let (sender, receiver) = channel::<Payment>(size_of::<Payment>() * 100);
+    let (sender, receiver) = channel::<Payment>(size_of::<Payment>() * 256);
 
     let rinha_load_balancer = rinha_load_balancer_service();
     let rinha_http = rinha_http_service(sender);

@@ -41,6 +41,7 @@ impl ServeHttp for RinhaHttp {
                     .body(empty)
                     .unwrap()
             }
+            ("GET", b"/payments-summary") => todo!(),
             _ => Response::builder()
                 .status(StatusCode::NOT_FOUND)
                 .header(header::CONTENT_LENGTH, empty_len)

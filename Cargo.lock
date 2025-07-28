@@ -1341,6 +1341,7 @@ dependencies = [
  "async-trait",
  "http",
  "jemallocator",
+ "once_cell",
  "pingora",
  "serde",
  "serde_json",

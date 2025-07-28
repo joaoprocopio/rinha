@@ -2,6 +2,7 @@ use crate::rinha_domain::Payment;
 use crate::rinha_load_balancer::Target;
 use async_trait::async_trait;
 use http::{Method, header};
+use once_cell::sync::Lazy;
 use pingora::connectors::http::Connector;
 use pingora::http::RequestHeader;
 use pingora::lb::LoadBalancer;
@@ -9,8 +10,13 @@ use pingora::prelude::{HttpPeer, RoundRobin};
 use pingora::server::ShutdownWatch;
 use pingora::services::background::{BackgroundService, GenBackgroundService};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::sync::mpsc::Receiver;
+use tokio::sync::{Mutex, RwLock};
+
+pub static DEFAULT_REQUEST_COUNTER: Lazy<RwLock<usize>> = Lazy::new(|| RwLock::new(0));
+pub static FALLBACK_REQUEST_COUNTER: Lazy<RwLock<usize>> = Lazy::new(|| RwLock::new(0));
+pub static DEFAULT_AMOUNT_COUNTER: Lazy<RwLock<f64>> = Lazy::new(|| RwLock::new(0.0));
+pub static FALLBACK_AMOUNT_COUNTER: Lazy<RwLock<f64>> = Lazy::new(|| RwLock::new(0.0));
 
 pub struct RinhaWorker {
     receiver: Mutex<Receiver<Payment>>,
@@ -62,8 +68,18 @@ impl RinhaWorker {
         let response_header = http.response_header().unwrap();
 
         match (target, response_header.status.is_success()) {
-            (Target::Default, true) => todo!(),
-            (Target::Fallback, true) => todo!(),
+            (Target::Default, true) => {
+                let mut count = DEFAULT_REQUEST_COUNTER.write().await;
+                *count += 1;
+                let mut amount = DEFAULT_AMOUNT_COUNTER.write().await;
+                *amount += payment.amount;
+            }
+            (Target::Fallback, true) => {
+                let mut count = FALLBACK_REQUEST_COUNTER.write().await;
+                *count += 1;
+                let mut amount = FALLBACK_AMOUNT_COUNTER.write().await;
+                *amount += payment.amount;
+            }
             _ => (),
         }
     }
