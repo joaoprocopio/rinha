@@ -55,13 +55,8 @@ impl RinhaWorker {
         http.finish_request_body().await.unwrap();
 
         http.read_response_header().await.unwrap();
-        let r = http.read_response_body().await.unwrap().unwrap();
-        let h = http.response_header();
 
-        dbg!(h);
-        dbg!(r);
-
-        // dbg!(data);
+        dbg!(http.response_header());
     }
 }
 
