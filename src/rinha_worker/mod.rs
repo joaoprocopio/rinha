@@ -31,7 +31,6 @@ impl RinhaWorker {
         let backend = load_balancer.select(b"", 8).unwrap();
 
         let peer = HttpPeer::new(backend.addr.clone(), false, backend.addr.to_string());
-        dbg!(&peer);
         let connector = Connector::new(None);
         let (mut http, _) = connector.get_http_session(&peer).await.unwrap();
 
@@ -40,7 +39,7 @@ impl RinhaWorker {
         let mut request_header = RequestHeader::build(Method::POST, b"/payments", None).unwrap();
 
         request_header
-            .append_header(header::HOST, backend.addr.to_string())
+            .append_header(header::HOST, "0.0.0.0:9999")
             .unwrap();
         request_header
             .append_header(header::CONTENT_LENGTH, payment.len())
@@ -55,10 +54,13 @@ impl RinhaWorker {
         http.write_request_body(payment.into(), true).await.unwrap();
         http.finish_request_body().await.unwrap();
 
-        dbg!(backend);
-        dbg!(http.read_response_header().await.unwrap());
+        http.read_response_header().await.unwrap();
+        let r = http.read_response_body().await.unwrap().unwrap();
+        let h = http.response_header();
 
-        // let data = http.read_body_bytes().await.unwrap().unwrap();
+        dbg!(h);
+        dbg!(r);
+
         // dbg!(data);
     }
 }
