@@ -1,5 +1,4 @@
-use crate::rinha_domain::Payment;
-use crate::rinha_load_balancer::Target;
+use crate::rinha_domain::{Payment, Target, TargetCounter};
 use async_trait::async_trait;
 use http::{Method, header};
 use once_cell::sync::Lazy;
@@ -13,10 +12,8 @@ use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{Mutex, RwLock};
 
-pub static DEFAULT_REQUEST_COUNTER: Lazy<RwLock<usize>> = Lazy::new(|| RwLock::new(0));
-pub static FALLBACK_REQUEST_COUNTER: Lazy<RwLock<usize>> = Lazy::new(|| RwLock::new(0));
-pub static DEFAULT_AMOUNT_COUNTER: Lazy<RwLock<f64>> = Lazy::new(|| RwLock::new(0.0));
-pub static FALLBACK_AMOUNT_COUNTER: Lazy<RwLock<f64>> = Lazy::new(|| RwLock::new(0.0));
+pub static TARGET_COUNTER: Lazy<RwLock<TargetCounter>> =
+    Lazy::new(|| RwLock::new(TargetCounter::default()));
 
 pub struct RinhaWorker {
     receiver: Mutex<Receiver<Payment>>,
@@ -69,16 +66,14 @@ impl RinhaWorker {
 
         match (target, response_header.status.is_success()) {
             (Target::Default, true) => {
-                let mut count = DEFAULT_REQUEST_COUNTER.write().await;
-                *count += 1;
-                let mut amount = DEFAULT_AMOUNT_COUNTER.write().await;
-                *amount += payment.amount;
+                let mut counter = TARGET_COUNTER.write().await;
+                counter.default.requests += 1;
+                counter.default.amount += payment.amount;
             }
             (Target::Fallback, true) => {
-                let mut count = FALLBACK_REQUEST_COUNTER.write().await;
-                *count += 1;
-                let mut amount = FALLBACK_AMOUNT_COUNTER.write().await;
-                *amount += payment.amount;
+                let mut counter = TARGET_COUNTER.write().await;
+                counter.fallback.requests += 1;
+                counter.fallback.amount += payment.amount;
             }
             _ => (),
         }
@@ -108,7 +103,7 @@ pub fn rinha_worker_service(
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
 ) -> GenBackgroundService<RinhaWorker> {
     GenBackgroundService::new(
-        "Rinha Worker Background Service".to_string(),
+        "Rinha Worker Background Service".into(),
         Arc::new(RinhaWorker::new(receiver, load_balancer)),
     )
 }

@@ -7,11 +7,7 @@ use pingora::{
 };
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
-#[derive(Clone, Debug)]
-pub enum Target {
-    Default,
-    Fallback,
-}
+use crate::rinha_domain::Target;
 
 fn http_health_check() -> HttpHealthCheck {
     let mut health_checker = HttpHealthCheck::new("0.0.0.0", false);
@@ -53,7 +49,7 @@ pub fn rinha_load_balancer_service() -> GenBackgroundService<LoadBalancer<RoundR
     upstreams.update_frequency = None;
 
     GenBackgroundService::new(
-        "Rinha Worker Background Service".to_string(),
+        "Rinha Worker Background Service".into(),
         Arc::new(upstreams),
     )
 }

@@ -1,4 +1,4 @@
-use crate::rinha_domain::Payment;
+use crate::{rinha_domain::Payment, rinha_worker::TARGET_COUNTER};
 use async_trait::async_trait;
 use http::{Response, StatusCode, header};
 use pingora::{
@@ -31,7 +31,7 @@ impl ServeHttp for RinhaHttp {
             ("POST", b"/payments") => {
                 let sender = Arc::clone(&self.sender);
                 let body = http_session.read_request_body().await.unwrap().unwrap();
-                let payment = serde_json::from_slice::<Payment>(&body).unwrap();
+                let payment = serde_json::de::from_slice::<Payment>(&body).unwrap();
 
                 sender.send(payment).await.unwrap();
 
@@ -41,7 +41,17 @@ impl ServeHttp for RinhaHttp {
                     .body(empty)
                     .unwrap()
             }
-            ("GET", b"/payments-summary") => todo!(),
+            ("GET", b"/payments-summary") => {
+                let target_counter = TARGET_COUNTER.read().await;
+                let target_count = serde_json::ser::to_vec(&*target_counter).unwrap();
+
+                Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::CONTENT_LENGTH, target_count.len())
+                    .body(target_count.into())
+                    .unwrap()
+            }
             _ => Response::builder()
                 .status(StatusCode::NOT_FOUND)
                 .header(header::CONTENT_LENGTH, empty_len)
@@ -52,7 +62,7 @@ impl ServeHttp for RinhaHttp {
 }
 
 pub fn rinha_http_service(sender: Sender<Payment>) -> Service<RinhaHttp> {
-    let mut http_service = Service::new("Rinha HTTP Service".to_string(), RinhaHttp::new(sender));
+    let mut http_service = Service::new("Rinha HTTP Service".into(), RinhaHttp::new(sender));
     http_service.add_tcp("0.0.0.0:9999");
 
     http_service
