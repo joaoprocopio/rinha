@@ -53,8 +53,10 @@ impl RinhaWorker {
             .unwrap();
         http.write_request_body(payment.into(), true).await.unwrap();
         http.finish_request_body().await.unwrap();
+        http.read_response_header().await.unwrap();
 
-        let response_header = http.read_response_header().await.unwrap();
+        let h = http.response_header().unwrap();
+        dbg!(h);
     }
 }
 
