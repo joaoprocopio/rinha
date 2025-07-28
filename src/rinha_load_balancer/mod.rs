@@ -7,6 +7,12 @@ use pingora::{
 };
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
+#[derive(Clone, Debug)]
+pub enum Target {
+    Default,
+    Fallback,
+}
+
 fn http_health_check() -> HttpHealthCheck {
     let mut health_checker = HttpHealthCheck::new("0.0.0.0", false);
 
@@ -30,10 +36,13 @@ fn http_health_check() -> HttpHealthCheck {
 }
 
 pub fn rinha_load_balancer_service() -> GenBackgroundService<LoadBalancer<RoundRobin>> {
-    let discovery = discovery::Static::new(BTreeSet::from([
-        Backend::new_with_weight("0.0.0.0:8001", 10).unwrap(),
-        Backend::new_with_weight("0.0.0.0:8002", 1).unwrap(),
-    ]));
+    let mut default_backend = Backend::new_with_weight("0.0.0.0:8001", 10).unwrap();
+    default_backend.ext.insert(Target::Default);
+
+    let mut fallback_backend = Backend::new_with_weight("0.0.0.0:8002", 1).unwrap();
+    fallback_backend.ext.insert(Target::Fallback);
+
+    let discovery = discovery::Static::new(BTreeSet::from([default_backend, fallback_backend]));
     let backends = Backends::new(discovery);
 
     let mut upstreams = LoadBalancer::<RoundRobin>::from_backends(backends);

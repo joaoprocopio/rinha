@@ -1,4 +1,5 @@
 use crate::rinha_domain::Payment;
+use crate::rinha_load_balancer::Target;
 use async_trait::async_trait;
 use http::{Method, header};
 use pingora::connectors::http::Connector;
@@ -29,6 +30,7 @@ impl RinhaWorker {
     async fn process_payment(&self, payment: Payment) {
         let load_balancer = Arc::clone(&self.load_balancer);
         let backend = load_balancer.select(b"", 8).unwrap();
+        let target = backend.ext.get::<Target>().unwrap();
 
         let peer = HttpPeer::new(backend.addr.clone(), false, backend.addr.to_string());
         let connector = Connector::new(None);
@@ -57,8 +59,13 @@ impl RinhaWorker {
         http.finish_request_body().await.unwrap();
         http.read_response_header().await.unwrap();
 
-        let h = http.response_header().unwrap();
-        dbg!(h);
+        let response_header = http.response_header().unwrap();
+
+        match (target, response_header.status.is_success()) {
+            (Target::Default, true) => todo!(),
+            (Target::Fallback, true) => todo!(),
+            _ => (),
+        }
     }
 }
 
