@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY . .
 RUN rm -rf target
-RUN cargo build --release --bin rinha
+RUN cargo build --release
 
 FROM debian:bookworm-slim AS runner
 
