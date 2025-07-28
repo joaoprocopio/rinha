@@ -1,6 +1,6 @@
 use crate::rinha_domain::Payment;
 use async_trait::async_trait;
-use http::{Response, header};
+use http::{Response, StatusCode, header};
 use pingora::{
     apps::http_app::ServeHttp, protocols::http::ServerSession, services::listening::Service,
 };
@@ -36,13 +36,13 @@ impl ServeHttp for RinhaHttp {
                 sender.send(payment).await.unwrap();
 
                 Response::builder()
-                    .status(200)
+                    .status(StatusCode::OK)
                     .header(header::CONTENT_LENGTH, empty_len)
                     .body(empty)
                     .unwrap()
             }
             _ => Response::builder()
-                .status(404)
+                .status(StatusCode::NOT_FOUND)
                 .header(header::CONTENT_LENGTH, empty_len)
                 .body(empty)
                 .unwrap(),
