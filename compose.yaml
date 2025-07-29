@@ -9,8 +9,10 @@ services:
     environment:
       RINHA_HOST: "0.0.0.0"
       RINHA_PORT: "9999"
-      RINHA_DEFAULT_BACKEND_ADDR: "127.0.0.1:8001"
-      RINHA_FALLBACK_BACKEND_ADDR: "127.0.0.1:8002"
+      RINHA_DEFAULT_BACKEND_HOST: "127.0.0.1"
+      RINHA_DEFAULT_BACKEND_PORT: "8001"
+      RINHA_FALLBACK_BACKEND_HOST: "127.0.0.1"
+      RINHA_FALLBACK_BACKEND_PORT: "8002"
     ports:
       - target: "9999"
         published: "9999"
