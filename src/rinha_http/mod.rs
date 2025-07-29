@@ -7,7 +7,7 @@ use pingora::{
     protocols::{TcpKeepalive, http::ServerSession},
     services::listening::Service,
 };
-use std::{str::FromStr, sync::Arc, time::Duration, vec};
+use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 
 pub const JSON_CONTENT_TYPE: &'static str = "application/json";
@@ -17,29 +17,20 @@ pub struct RinhaHttp {
 }
 
 impl RinhaHttp {
+    const EMPTY_BODY: Vec<u8> = vec![];
+    const EMPTY_BODY_LEN: i16 = 0;
+
     fn new(sender: mpsc::Sender<Payment>) -> Self {
         Self {
             sender: Arc::new(sender),
         }
     }
 
-    fn empty_response_with_status_code<T>(&self, status_code: T) -> Response<Vec<u8>>
-    where
-        T: TryInto<StatusCode>,
-        <T as TryInto<StatusCode>>::Error: Into<http::Error>,
-    {
+    fn empty_response_with_status_code(&self, status_code: StatusCode) -> Response<Vec<u8>> {
         Response::builder()
             .status(status_code)
-            .header(header::CONTENT_LENGTH, 0)
-            .body(vec![])
-            .unwrap_or_else(|_| self.internal_server_error_response())
-    }
-
-    fn internal_server_error_response(&self) -> Response<Vec<u8>> {
-        Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .header(header::CONTENT_LENGTH, 0)
-            .body(vec![])
+            .header(header::CONTENT_LENGTH, Self::EMPTY_BODY_LEN)
+            .body(Self::EMPTY_BODY)
             .unwrap()
     }
 
@@ -89,7 +80,9 @@ impl RinhaHttp {
             .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
             .header(header::CONTENT_LENGTH, target_counter.len())
             .body(target_counter.into())
-            .unwrap_or_else(|_| self.internal_server_error_response())
+            .unwrap_or_else(|_| {
+                self.empty_response_with_status_code(StatusCode::INTERNAL_SERVER_ERROR)
+            })
     }
 }
 
