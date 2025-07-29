@@ -8,7 +8,7 @@ pub enum Target {
     Fallback,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Payment {
     #[serde(rename = "correlationId")]
     pub correlation_id: Uuid,
