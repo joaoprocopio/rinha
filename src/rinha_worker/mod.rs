@@ -31,6 +31,102 @@ impl RinhaWorker {
             load_balancer: load_balancer,
         }
     }
+
+    async fn process_payment(&self, payment: Payment) {
+        let load_balancer = Arc::clone(&self.load_balancer);
+
+        let Some(backend) = load_balancer.select(b"", 8) else {
+            debug_assert!(false, "RinhaHttp::process_payment: no backend found");
+            return;
+        };
+        let Some(target) = backend.ext.get::<Target>() else {
+            debug_assert!(
+                false,
+                "RinhaHttp::process_payment: failed to get Target backend ext"
+            );
+            return;
+        };
+
+        let peer = HttpPeer::new(backend.addr.clone(), false, backend.addr.to_string());
+        let connector = Connector::new(None);
+
+        let Ok((mut http, _)) = connector.get_http_session(&peer).await else {
+            debug_assert!(
+                false,
+                "RinhaHttp::process_payment: failed to get http session"
+            );
+            return;
+        };
+
+        let Ok(payment_ser) = serde_json::ser::to_vec(&payment) else {
+            debug_assert!(
+                false,
+                "RinhaHttp::process_payment: failed to serialize payment struct"
+            );
+            return;
+        };
+
+        let Ok(mut request_header) = RequestHeader::build(Method::POST, b"/payments", None) else {
+            debug_assert!(
+                false,
+                "RinhaHttp::process_payment: failed to build request header"
+            );
+            return;
+        };
+
+        if let Err(_) = request_header
+            .append_header(header::HOST, RINHA_HOST.as_str())
+            .and(request_header.append_header(header::CONTENT_LENGTH, payment_ser.len()))
+            .and(request_header.append_header(header::CONTENT_TYPE, JSON_CONTENT_TYPE))
+        {
+            debug_assert!(
+                false,
+                "RinhaHttp::process_payment: failed to write request headers"
+            );
+            return;
+        };
+
+        if let Err(_) = http
+            .write_request_header(Box::new(request_header))
+            .await
+            .and(http.write_request_body(payment_ser.into(), true).await)
+            .and(http.finish_request_body().await)
+        {
+            debug_assert!(false, "RinhaHttp::process_payment: failed to send request");
+            return;
+        };
+
+        if let Err(_) = http.read_response_header().await {
+            debug_assert!(false, "RinhaHttp::process_payment: failed to read header");
+            return;
+        }
+
+        let Some(response_header) = http.response_header() else {
+            debug_assert!(
+                false,
+                "RinhaHttp::process_payment: fail while reading response header"
+            );
+            return;
+        };
+
+        if !response_header.status.is_success() {
+            debug_assert!(false, "RinhaHttp::process_payment: non-200 status code");
+            return;
+        }
+
+        let mut counter = TARGET_COUNTER.write().await;
+
+        match target {
+            Target::Default => {
+                counter.default.requests += 1;
+                counter.default.amount += payment.amount;
+            }
+            Target::Fallback => {
+                counter.fallback.requests += 1;
+                counter.fallback.amount += payment.amount;
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -44,85 +140,9 @@ impl BackgroundService for RinhaWorker {
                     break;
                 }
                 Some(payment) = receiver.recv() => {
-                    process_payment(payment, Arc::clone(&self.load_balancer)).await
+                    self.process_payment(payment).await
                 }
             }
-        }
-    }
-}
-
-async fn process_payment(payment: Payment, load_balancer: Arc<LoadBalancer<RoundRobin>>) {
-    let Some(backend) = load_balancer.select(b"", 8) else {
-        debug_assert!(true, "process_payment: no backend found");
-        return;
-    };
-    let Some(target) = backend.ext.get::<Target>() else {
-        debug_assert!(true, "process_payment: failed to get Target backend ext");
-        return;
-    };
-
-    let peer = HttpPeer::new(backend.addr.clone(), false, backend.addr.to_string());
-    let connector = Connector::new(None);
-
-    let Ok((mut http, _)) = connector.get_http_session(&peer).await else {
-        debug_assert!(true, "process_payment: failed to get http session");
-        return;
-    };
-
-    let Ok(payment_ser) = serde_json::ser::to_vec(&payment) else {
-        debug_assert!(true, "process_payment: failed to serialize payment struct");
-        return;
-    };
-
-    let Ok(mut request_header) = RequestHeader::build(Method::POST, b"/payments", None) else {
-        debug_assert!(true, "process_payment: failed to build request header");
-        return;
-    };
-
-    if let Err(_) = request_header
-        .append_header(header::HOST, RINHA_HOST.as_str())
-        .and(request_header.append_header(header::CONTENT_LENGTH, payment_ser.len()))
-        .and(request_header.append_header(header::CONTENT_TYPE, JSON_CONTENT_TYPE))
-    {
-        debug_assert!(true, "process_payment: failed to write request headers");
-        return;
-    };
-
-    if let Err(_) = http
-        .write_request_header(Box::new(request_header))
-        .await
-        .and(http.write_request_body(payment_ser.into(), true).await)
-        .and(http.finish_request_body().await)
-    {
-        debug_assert!(true, "process_payment: failed to send request");
-        return;
-    };
-
-    if let Err(_) = http.read_response_header().await {
-        debug_assert!(true, "process_payment: failed to read header");
-        return;
-    }
-
-    let Some(response_header) = http.response_header() else {
-        debug_assert!(true, "process_payment: fail while reading response header");
-        return;
-    };
-
-    if !response_header.status.is_success() {
-        debug_assert!(true, "process_payment: non-200 status code");
-        return;
-    }
-
-    match target {
-        Target::Default => {
-            let mut counter = TARGET_COUNTER.write().await;
-            counter.default.requests += 1;
-            counter.default.amount += payment.amount;
-        }
-        Target::Fallback => {
-            let mut counter = TARGET_COUNTER.write().await;
-            counter.fallback.requests += 1;
-            counter.fallback.amount += payment.amount;
         }
     }
 }
