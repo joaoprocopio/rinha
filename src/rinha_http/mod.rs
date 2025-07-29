@@ -10,13 +10,10 @@ use pingora::{
     protocols::{TcpKeepalive, http::ServerSession},
     services::listening::Service,
 };
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration, vec};
 use tokio::sync::mpsc;
 
 pub const JSON_CONTENT_TYPE: &'static str = "application/json";
-
-const EMPTY_BODY: Vec<u8> = vec![];
-const EMPTY_BODY_LEN: usize = 0;
 
 pub struct RinhaHttp {
     sender: Arc<mpsc::Sender<Payment>>,
@@ -35,55 +32,49 @@ impl ServeHttp for RinhaHttp {
     async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
         match http_session.read_request().await {
             Ok(true) => (),
-            Ok(false) => return Response::new(EMPTY_BODY),
-            _ => return bad_request(),
+            Ok(false) => return empty_response(),
+            _ => return empty_response_with_status_code(StatusCode::BAD_REQUEST),
         }
 
         let header = http_session.req_header();
         let response = match (header.method.as_str(), header.raw_path()) {
             ("POST", b"/payments") => payments(http_session, Arc::clone(&self.sender)).await,
             ("GET", b"/payments-summary") => payments_summary(http_session).await,
-            _ => not_found(),
+            _ => empty_response_with_status_code(StatusCode::NOT_FOUND),
         };
 
         if let Err(_) = http_session.drain_request_body().await {
-            return Response::new(EMPTY_BODY);
+            return empty_response_with_status_code(StatusCode::INTERNAL_SERVER_ERROR);
         }
 
         response
     }
 }
 
-fn internal_server_error() -> Response<Vec<u8>> {
-    Response::new(b"Internal Server Error".into())
-}
-fn bad_request() -> Response<Vec<u8>> {
-    Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .header(header::CONTENT_LENGTH, EMPTY_BODY_LEN)
-        .body(EMPTY_BODY)
-        .unwrap_or_else(|_| internal_server_error())
+fn internal_server_error_response() -> Response<Vec<u8>> {
+    Response::new("Internal Server Error".into())
 }
 
-fn not_found() -> Response<Vec<u8>> {
+fn empty_response() -> Response<Vec<u8>> {
+    Response::new(vec![])
+}
+
+fn empty_response_with_status_code<T>(status_code: T) -> Response<Vec<u8>>
+where
+    T: TryInto<StatusCode>,
+    <T as TryInto<StatusCode>>::Error: Into<http::Error>,
+{
     Response::builder()
-        .status(StatusCode::NOT_FOUND)
-        .header(header::CONTENT_LENGTH, EMPTY_BODY_LEN)
-        .body(EMPTY_BODY)
-        .unwrap_or_else(|_| internal_server_error())
+        .status(status_code)
+        .header(header::CONTENT_LENGTH, 0)
+        .body(vec![])
+        .unwrap_or_else(|_| internal_server_error_response())
 }
 
 async fn payments_summary(_http_session: &mut ServerSession) -> Response<Vec<u8>> {
     let target_counter = TARGET_COUNTER.read().await;
-    let target_count = match serde_json::ser::to_vec(&*target_counter) {
-        Ok(target_count) => target_count,
-        _ => {
-            return Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .header(header::CONTENT_LENGTH, EMPTY_BODY_LEN)
-                .body(EMPTY_BODY)
-                .unwrap_or_else(|_| internal_server_error());
-        }
+    let Ok(target_count) = serde_json::ser::to_vec(&*target_counter) else {
+        return empty_response_with_status_code(StatusCode::BAD_REQUEST);
     };
 
     Response::builder()
@@ -91,48 +82,26 @@ async fn payments_summary(_http_session: &mut ServerSession) -> Response<Vec<u8>
         .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
         .header(header::CONTENT_LENGTH, target_count.len())
         .body(target_count.into())
-        .unwrap_or_else(|_| internal_server_error())
+        .unwrap_or_else(|_| internal_server_error_response())
 }
 
 async fn payments(
     http_session: &mut ServerSession,
     sender: Arc<mpsc::Sender<Payment>>,
 ) -> Response<Vec<u8>> {
-    let body = match http_session.read_request_body().await {
-        Ok(Some(body)) => body,
-        _ => {
-            return Response::builder()
-                .status(StatusCode::NOT_ACCEPTABLE)
-                .header(header::CONTENT_LENGTH, EMPTY_BODY_LEN)
-                .body(EMPTY_BODY)
-                .unwrap_or_else(|_| internal_server_error());
-        }
+    let Ok(Some(body)) = http_session.read_request_body().await else {
+        return empty_response_with_status_code(StatusCode::NOT_ACCEPTABLE);
     };
 
-    let payment = match serde_json::de::from_slice::<Payment>(&body) {
-        Ok(payment) => payment,
-        _ => {
-            return Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .header(header::CONTENT_LENGTH, EMPTY_BODY_LEN)
-                .body(EMPTY_BODY)
-                .unwrap_or_else(|_| internal_server_error());
-        }
+    let Ok(payment) = serde_json::de::from_slice::<Payment>(&body) else {
+        return empty_response_with_status_code(StatusCode::BAD_REQUEST);
     };
 
     if let Err(_) = sender.send(payment).await {
-        return Response::builder()
-            .status(StatusCode::SERVICE_UNAVAILABLE)
-            .header(header::CONTENT_LENGTH, EMPTY_BODY_LEN)
-            .body(EMPTY_BODY)
-            .unwrap_or_else(|_| internal_server_error());
+        return empty_response_with_status_code(StatusCode::SERVICE_UNAVAILABLE);
     }
 
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_LENGTH, EMPTY_BODY_LEN)
-        .body(EMPTY_BODY)
-        .unwrap_or_else(|_| internal_server_error())
+    empty_response_with_status_code(StatusCode::OK)
 }
 
 pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<RinhaHttp> {
