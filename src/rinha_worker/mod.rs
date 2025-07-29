@@ -1,4 +1,5 @@
 use crate::rinha_domain::{Payment, Target, TargetCounter};
+use crate::rinha_http::JSON_CONTENT_TYPE;
 use async_trait::async_trait;
 use http::{Method, header};
 use pingora::connectors::http::Connector;
@@ -52,7 +53,7 @@ impl RinhaWorker {
             .append_header(header::CONTENT_LENGTH, payment_ser.len())
             .unwrap();
         request_header
-            .append_header(header::CONTENT_TYPE, "application/json")
+            .append_header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
             .unwrap();
 
         http.write_request_header(Box::new(request_header))
