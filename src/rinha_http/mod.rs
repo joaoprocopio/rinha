@@ -33,29 +33,47 @@ impl RinhaHttp {
 #[async_trait]
 impl ServeHttp for RinhaHttp {
     async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
-        let header = http_session.req_header();
-
-        match (header.method.as_str(), header.raw_path()) {
-            ("POST", b"/payments") => payments(http_session, Arc::clone(&self.sender)).await,
-            ("GET", b"/payments-summary") => payments_summary().await,
-            _ => not_found(),
+        match http_session.read_request().await {
+            Ok(true) => (),
+            Ok(false) => return Response::new(EMPTY_BODY),
+            _ => return bad_request(),
         }
+
+        let header = http_session.req_header();
+        let response = match (header.method.as_str(), header.raw_path()) {
+            ("POST", b"/payments") => payments(http_session, Arc::clone(&self.sender)).await,
+            ("GET", b"/payments-summary") => payments_summary(http_session).await,
+            _ => not_found(),
+        };
+
+        if let Err(_) = http_session.drain_request_body().await {
+            return Response::new(EMPTY_BODY);
+        }
+
+        response
     }
 }
 
 fn internal_server_error() -> Response<Vec<u8>> {
     Response::new(b"Internal Server Error".into())
 }
+fn bad_request() -> Response<Vec<u8>> {
+    Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .header(header::CONTENT_LENGTH, EMPTY_BODY_LEN)
+        .body(EMPTY_BODY)
+        .unwrap_or_else(|_| internal_server_error())
+}
 
 fn not_found() -> Response<Vec<u8>> {
-    return Response::builder()
+    Response::builder()
         .status(StatusCode::NOT_FOUND)
         .header(header::CONTENT_LENGTH, EMPTY_BODY_LEN)
         .body(EMPTY_BODY)
-        .unwrap_or_else(|_| internal_server_error());
+        .unwrap_or_else(|_| internal_server_error())
 }
 
-async fn payments_summary() -> Response<Vec<u8>> {
+async fn payments_summary(_http_session: &mut ServerSession) -> Response<Vec<u8>> {
     let target_counter = TARGET_COUNTER.read().await;
     let target_count = match serde_json::ser::to_vec(&*target_counter) {
         Ok(target_count) => target_count,
