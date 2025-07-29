@@ -30,13 +30,8 @@ impl RinhaHttp {
 #[async_trait]
 impl ServeHttp for RinhaHttp {
     async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
-        match http_session.read_request().await {
-            Ok(true) => (),
-            Ok(false) => return empty_response(),
-            _ => return empty_response_with_status_code(StatusCode::BAD_REQUEST),
-        }
-
         let header = http_session.req_header();
+
         let response = match (header.method.as_str(), header.raw_path()) {
             ("POST", b"/payments") => payments(http_session, Arc::clone(&self.sender)).await,
             ("GET", b"/payments-summary") => payments_summary(http_session).await,
@@ -53,10 +48,6 @@ impl ServeHttp for RinhaHttp {
 
 fn internal_server_error_response() -> Response<Vec<u8>> {
     Response::new("Internal Server Error".into())
-}
-
-fn empty_response() -> Response<Vec<u8>> {
-    Response::new(vec![])
 }
 
 fn empty_response_with_status_code<T>(status_code: T) -> Response<Vec<u8>>

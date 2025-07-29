@@ -13,7 +13,7 @@ use crate::{
 use pingora::{prelude::*, server::configuration::ServerConf};
 use tokio::sync::mpsc;
 
-fn main() -> Result<()> {
+fn main() {
     let opt = Opt::default();
     let conf = ServerConf::default();
     let mut server = Server::new_with_opt_and_conf(opt, conf);
