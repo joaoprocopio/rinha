@@ -15,14 +15,14 @@ pub static TARGET_COUNTER: LazyLock<RwLock<TargetCounter>> =
     LazyLock::new(|| RwLock::new(TargetCounter::default()));
 
 pub struct RinhaWorker {
-    receiver: RwLock<Receiver<Payment>>,
+    receiver: tokio::sync::RwLock<Receiver<Payment>>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
 }
 
 impl RinhaWorker {
     fn new(receiver: Receiver<Payment>, load_balancer: Arc<LoadBalancer<RoundRobin>>) -> Self {
         Self {
-            receiver: RwLock::new(receiver),
+            receiver: tokio::sync::RwLock::new(receiver),
             load_balancer: load_balancer,
         }
     }
@@ -82,13 +82,15 @@ impl RinhaWorker {
 #[async_trait]
 impl BackgroundService for RinhaWorker {
     async fn start(&self, mut shutdown: ShutdownWatch) {
+        let mut receiver = self.receiver.write().await;
+
         loop {
             tokio::select! {
                 _ = shutdown.changed() => {
                     break;
                 }
                 Some(payment) = receiver.recv() => {
-                    self.process_payment(payment).await;
+                    self.process_payment(payment).await
                 }
             }
         }

@@ -1,5 +1,4 @@
-use std::time::Duration;
-
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -15,8 +14,8 @@ pub struct Payment {
     pub correlation_id: Uuid,
     #[serde(rename = "amount")]
     pub amount: f32,
-    #[serde(rename = "requestedAt")]
-    pub requested_at: Duration,
+    #[serde(rename = "requestedAt", default = "Utc::now")]
+    pub requested_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
