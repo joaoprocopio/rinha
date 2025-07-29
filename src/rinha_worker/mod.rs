@@ -99,6 +99,7 @@ async fn process_payment(payment: Payment, load_balancer: Arc<LoadBalancer<Round
 
     if let Err(_) = http.read_response_header().await {
         log::error!("process_payment: failed to read header");
+        return;
     }
 
     let Some(response_header) = http.response_header() else {
