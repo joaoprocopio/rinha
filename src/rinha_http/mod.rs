@@ -32,34 +32,76 @@ impl ServeHttp for RinhaHttp {
 
         match (header.method.as_str(), header.raw_path()) {
             ("POST", b"/payments") => {
-                let sender = Arc::clone(&self.sender);
-                let body = http_session.read_request_body().await.unwrap().unwrap();
-                let payment = serde_json::de::from_slice::<Payment>(&body).unwrap();
+                let body = match http_session.read_request_body().await {
+                    Ok(Some(body)) => body,
+                    Ok(None) => {
+                        return Response::builder()
+                            .status(StatusCode::NOT_ACCEPTABLE)
+                            .header(header::CONTENT_LENGTH, empty_len)
+                            .body(empty)
+                            .unwrap_or_else(|_| Response::new("Internal Server Error".into()));
+                    }
+                    Err(_) => {
+                        return Response::builder()
+                            .status(StatusCode::BAD_REQUEST)
+                            .header(header::CONTENT_LENGTH, empty_len)
+                            .body(empty)
+                            .unwrap_or_else(|_| Response::new("Internal Server Error".into()));
+                    }
+                };
 
-                sender.send(payment).await.unwrap();
+                let payment = match serde_json::de::from_slice::<Payment>(&body) {
+                    Ok(payment) => payment,
+                    Err(_) => {
+                        return Response::builder()
+                            .status(StatusCode::BAD_REQUEST)
+                            .header(header::CONTENT_LENGTH, empty_len)
+                            .body(empty)
+                            .unwrap_or_else(|_| Response::new("Internal Server Error".into()));
+                    }
+                };
+
+                let sender = Arc::clone(&self.sender);
+
+                if let Err(_) = sender.send(payment).await {
+                    return Response::builder()
+                        .status(StatusCode::SERVICE_UNAVAILABLE)
+                        .header(header::CONTENT_LENGTH, empty_len)
+                        .body(empty)
+                        .unwrap_or_else(|_| Response::new("Internal Server Error".into()));
+                }
 
                 Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_LENGTH, empty_len)
                     .body(empty)
-                    .unwrap()
+                    .unwrap_or_else(|_| Response::new("Internal Server Error".into()))
             }
             ("GET", b"/payments-summary") => {
                 let target_counter = TARGET_COUNTER.read().await;
-                let target_count = serde_json::ser::to_vec(&*target_counter).unwrap();
+                let target_count = match serde_json::ser::to_vec(&*target_counter) {
+                    Ok(target_count) => target_count,
+                    Err(_) => {
+                        return Response::builder()
+                            .status(StatusCode::BAD_REQUEST)
+                            .header(header::CONTENT_LENGTH, empty_len)
+                            .body(empty)
+                            .unwrap_or_else(|_| Response::new("Internal Server Error".into()));
+                    }
+                };
 
                 Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "application/json")
                     .header(header::CONTENT_LENGTH, target_count.len())
                     .body(target_count.into())
-                    .unwrap()
+                    .unwrap_or_else(|_| Response::new("Internal Server Error".into()))
             }
             _ => Response::builder()
                 .status(StatusCode::NOT_FOUND)
                 .header(header::CONTENT_LENGTH, empty_len)
                 .body(empty)
-                .unwrap(),
+                .unwrap_or_else(|_| Response::new("Internal Server Error".into())),
         }
     }
 }

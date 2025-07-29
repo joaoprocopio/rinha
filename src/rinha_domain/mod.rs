@@ -8,7 +8,7 @@ pub enum Target {
     Fallback,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy)]
 pub struct Payment {
     #[serde(rename = "correlationId")]
     pub correlation_id: Uuid,
@@ -18,7 +18,7 @@ pub struct Payment {
     pub requested_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy)]
 pub struct TargetCounter {
     #[serde(rename = "default")]
     pub default: Count,
@@ -26,7 +26,7 @@ pub struct TargetCounter {
     pub fallback: Count,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy)]
 pub struct Count {
     #[serde(rename = "totalRequests")]
     pub requests: u32,
