@@ -3,8 +3,7 @@ services:
     build:
       context: "."
       dockerfile: "./dockerfile"
-    hostname: "rinha"
-    container_name: "rinha"
+    platform: "linux/amd64"
     networks:
       - "payment-processor"
     environment:
