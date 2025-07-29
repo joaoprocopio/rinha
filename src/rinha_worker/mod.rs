@@ -8,7 +8,6 @@ use pingora::lb::LoadBalancer;
 use pingora::prelude::{HttpPeer, RoundRobin};
 use pingora::server::ShutdownWatch;
 use pingora::services::background::{BackgroundService, GenBackgroundService};
-use std::result;
 use std::sync::{Arc, LazyLock};
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
