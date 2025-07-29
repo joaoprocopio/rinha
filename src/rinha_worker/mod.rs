@@ -52,31 +52,26 @@ impl BackgroundService for RinhaWorker {
 }
 
 async fn process_payment(payment: Payment, load_balancer: Arc<LoadBalancer<RoundRobin>>) {
-    let backend = match load_balancer.select(b"", 8) {
-        Some(backend) => backend,
-        _ => return,
+    let Some(backend) = load_balancer.select(b"", 8) else {
+        return;
     };
-    let target = match backend.ext.get::<Target>() {
-        Some(target) => target,
-        _ => return,
+    let Some(target) = backend.ext.get::<Target>() else {
+        return;
     };
 
     let peer = HttpPeer::new(backend.addr.clone(), false, backend.addr.to_string());
     let connector = Connector::new(None);
 
-    let (mut http, _) = match connector.get_http_session(&peer).await {
-        Ok(session) => session,
-        _ => return,
+    let Ok((mut http, _)) = connector.get_http_session(&peer).await else {
+        return;
     };
 
-    let payment_ser = match serde_json::ser::to_vec(&payment) {
-        Ok(payment_ser) => payment_ser,
-        _ => return,
+    let Ok(payment_ser) = serde_json::ser::to_vec(&payment) else {
+        return;
     };
 
-    let mut request_header = match RequestHeader::build(Method::POST, b"/payments", None) {
-        Ok(request_header) => request_header,
-        _ => return,
+    let Ok(mut request_header) = RequestHeader::build(Method::POST, b"/payments", None) else {
+        return;
     };
 
     if let Err(_) = request_header
@@ -101,18 +96,21 @@ async fn process_payment(payment: Payment, load_balancer: Arc<LoadBalancer<Round
         return;
     };
 
-    match (target, response_header.status.is_success()) {
-        (Target::Default, true) => {
+    if !response_header.status.is_success() {
+        return;
+    }
+
+    match target {
+        Target::Default => {
             let mut counter = TARGET_COUNTER.write().await;
             counter.default.requests += 1;
             counter.default.amount += payment.amount;
         }
-        (Target::Fallback, true) => {
+        Target::Fallback => {
             let mut counter = TARGET_COUNTER.write().await;
             counter.fallback.requests += 1;
             counter.fallback.amount += payment.amount;
         }
-        _ => (),
     }
 }
 
