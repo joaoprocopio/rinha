@@ -11,9 +11,9 @@ pub static PORT: LazyLock<String> =
 pub static ADDR: LazyLock<String> = LazyLock::new(|| format!("{}:{}", *HOST, *PORT));
 
 pub static DEFAULT_BACKEND_ADDR: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_DEFAULT_BACKEND_ADDR").unwrap_or("0.0.0.0:8001".into()));
+    LazyLock::new(|| env::var("RINHA_DEFAULT_BACKEND_ADDR").unwrap_or("127.0.0.1:8001".into()));
 pub static FALLBACK_BACKEND_ADDR: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_FALLBACK_BACKEND_ADDR").unwrap_or("0.0.0.0:8002".into()));
+    LazyLock::new(|| env::var("RINHA_FALLBACK_BACKEND_ADDR").unwrap_or("127.0.0.1:8002".into()));
 
 #[derive(Clone, Debug)]
 pub enum Target {
