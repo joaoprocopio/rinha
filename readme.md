@@ -1,7 +1,6 @@
 # rinha
 
 ```sh
-git submodule update --recursive
-docker compose -f ext/payment-processor/docker-compose.yml up -d
+docker compose -f compose.processor.yml up -d
 docker compose up -d
 ```
