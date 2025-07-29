@@ -31,84 +31,90 @@ impl ServeHttp for RinhaHttp {
 
         let Ok(path) = String::from_utf8(header.raw_path().to_vec()) else {
             debug_assert!(true, "RinhaHttp::response: path is not a valid utf-8");
-            return empty_response_with_status_code(StatusCode::BAD_REQUEST);
+            return self.empty_response_with_status_code(StatusCode::BAD_REQUEST);
         };
         let Ok(uri) = Uri::from_str(&path) else {
             debug_assert!(true, "RinhaHttp::response: path is not a valid uri");
-            return empty_response_with_status_code(StatusCode::BAD_REQUEST);
+            return self.empty_response_with_status_code(StatusCode::BAD_REQUEST);
         };
 
         let response = match (header.method.as_str(), uri.path()) {
-            ("POST", "/payments") => payments(http_session, uri, Arc::clone(&self.sender)).await,
-            ("GET", "/payments-summary") => payments_summary(http_session, uri).await,
-            _ => empty_response_with_status_code(StatusCode::NOT_FOUND),
+            ("POST", "/payments") => self.payments(http_session, uri).await,
+            ("GET", "/payments-summary") => self.payments_summary(http_session, uri).await,
+            _ => self.empty_response_with_status_code(StatusCode::NOT_FOUND),
         };
 
         if let Err(_) = http_session.drain_request_body().await {
             debug_assert!(true, "RinhaHttp::response: failed draining request body");
-            return empty_response_with_status_code(StatusCode::INTERNAL_SERVER_ERROR);
+            return self.empty_response_with_status_code(StatusCode::INTERNAL_SERVER_ERROR);
         }
 
         response
     }
 }
 
-fn empty_response_with_status_code<T>(status_code: T) -> Response<Vec<u8>>
-where
-    T: TryInto<StatusCode>,
-    <T as TryInto<StatusCode>>::Error: Into<http::Error>,
-{
-    Response::builder()
-        .status(status_code)
-        .header(header::CONTENT_LENGTH, 0)
-        .body(vec![])
-        .unwrap_or_else(|_| internal_server_error_response())
-}
+impl RinhaHttp {
+    async fn payments(&self, http_session: &mut ServerSession, _uri: Uri) -> Response<Vec<u8>> {
+        let sender = Arc::clone(&self.sender);
 
-fn internal_server_error_response() -> Response<Vec<u8>> {
-    Response::builder()
-        .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .header(header::CONTENT_LENGTH, 0)
-        .body(vec![])
-        .unwrap()
-}
+        let Ok(Some(body)) = http_session.read_request_body().await else {
+            debug_assert!(true, "payments: failed while reading request body");
+            return self.empty_response_with_status_code(StatusCode::NOT_ACCEPTABLE);
+        };
 
-async fn payments_summary(_http_session: &mut ServerSession, _uri: Uri) -> Response<Vec<u8>> {
-    let target_counter = TARGET_COUNTER.read().await;
-    let Ok(target_count) = serde_json::ser::to_vec(&*target_counter) else {
-        debug_assert!(true, "payments_summary: failed serializing payment");
-        return empty_response_with_status_code(StatusCode::BAD_REQUEST);
-    };
+        let Ok(payment) = serde_json::de::from_slice::<Payment>(&body) else {
+            debug_assert!(true, "payments: fail while deserializing request body");
+            return self.empty_response_with_status_code(StatusCode::BAD_REQUEST);
+        };
 
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
-        .header(header::CONTENT_LENGTH, target_count.len())
-        .body(target_count.into())
-        .unwrap_or_else(|_| internal_server_error_response())
-}
+        if let Err(_) = sender.send(payment).await {
+            debug_assert!(true, "payments: channel send failed");
+            return self.empty_response_with_status_code(StatusCode::SERVICE_UNAVAILABLE);
+        }
 
-async fn payments(
-    http_session: &mut ServerSession,
-    _uri: Uri,
-    sender: Arc<mpsc::Sender<Payment>>,
-) -> Response<Vec<u8>> {
-    let Ok(Some(body)) = http_session.read_request_body().await else {
-        debug_assert!(true, "payments: failed while reading request body");
-        return empty_response_with_status_code(StatusCode::NOT_ACCEPTABLE);
-    };
-
-    let Ok(payment) = serde_json::de::from_slice::<Payment>(&body) else {
-        debug_assert!(true, "payments: fail while deserializing request body");
-        return empty_response_with_status_code(StatusCode::BAD_REQUEST);
-    };
-
-    if let Err(_) = sender.send(payment).await {
-        debug_assert!(true, "payments: channel send failed");
-        return empty_response_with_status_code(StatusCode::SERVICE_UNAVAILABLE);
+        self.empty_response_with_status_code(StatusCode::OK)
     }
 
-    empty_response_with_status_code(StatusCode::OK)
+    async fn payments_summary(
+        &self,
+        _http_session: &mut ServerSession,
+        _uri: Uri,
+    ) -> Response<Vec<u8>> {
+        let target_counter = TARGET_COUNTER.read().await;
+        let Ok(target_count) = serde_json::ser::to_vec(&*target_counter) else {
+            debug_assert!(true, "payments_summary: failed serializing payment");
+            return self.empty_response_with_status_code(StatusCode::BAD_REQUEST);
+        };
+
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
+            .header(header::CONTENT_LENGTH, target_count.len())
+            .body(target_count.into())
+            .unwrap_or_else(|_| self.internal_server_error_response())
+    }
+}
+
+impl RinhaHttp {
+    fn empty_response_with_status_code<T>(&self, status_code: T) -> Response<Vec<u8>>
+    where
+        T: TryInto<StatusCode>,
+        <T as TryInto<StatusCode>>::Error: Into<http::Error>,
+    {
+        Response::builder()
+            .status(status_code)
+            .header(header::CONTENT_LENGTH, 0)
+            .body(vec![])
+            .unwrap_or_else(|_| self.internal_server_error_response())
+    }
+
+    fn internal_server_error_response(&self) -> Response<Vec<u8>> {
+        Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .header(header::CONTENT_LENGTH, 0)
+            .body(vec![])
+            .unwrap()
+    }
 }
 
 pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<RinhaHttp> {
