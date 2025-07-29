@@ -11,15 +11,16 @@ use crate::{
     rinha_load_balancer::rinha_load_balancer_service, rinha_worker::rinha_worker_service,
 };
 use pingora::{prelude::*, server::configuration::ServerConf};
-use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc;
 
 fn main() -> Result<()> {
     let opt = Opt::default();
     let conf = ServerConf::default();
     let mut server = Server::new_with_opt_and_conf(opt, conf);
+
     server.bootstrap();
 
-    let (sender, receiver) = channel::<Payment>(size_of::<Payment>() * 256);
+    let (sender, receiver) = mpsc::channel::<Payment>(size_of::<Payment>() * 256);
 
     let rinha_load_balancer = rinha_load_balancer_service();
     let rinha_http = rinha_http_service(sender);

@@ -1,7 +1,6 @@
 use crate::rinha_domain::{Payment, Target, TargetCounter};
 use async_trait::async_trait;
 use http::{Method, header};
-use parking_lot::RwLock;
 use pingora::connectors::http::Connector;
 use pingora::http::RequestHeader;
 use pingora::lb::LoadBalancer;
@@ -9,18 +8,22 @@ use pingora::prelude::{HttpPeer, RoundRobin};
 use pingora::server::ShutdownWatch;
 use pingora::services::background::{BackgroundService, GenBackgroundService};
 use std::sync::{Arc, LazyLock};
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::RwLock;
+use tokio::sync::mpsc;
 
 pub static TARGET_COUNTER: LazyLock<RwLock<TargetCounter>> =
     LazyLock::new(|| RwLock::new(TargetCounter::default()));
 
 pub struct RinhaWorker {
-    receiver: tokio::sync::RwLock<Receiver<Payment>>,
+    receiver: RwLock<mpsc::Receiver<Payment>>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
 }
 
 impl RinhaWorker {
-    fn new(receiver: Receiver<Payment>, load_balancer: Arc<LoadBalancer<RoundRobin>>) -> Self {
+    fn new(
+        receiver: mpsc::Receiver<Payment>,
+        load_balancer: Arc<LoadBalancer<RoundRobin>>,
+    ) -> Self {
         Self {
             receiver: tokio::sync::RwLock::new(receiver),
             load_balancer: load_balancer,
@@ -65,12 +68,12 @@ impl RinhaWorker {
 
         match (target, response_header.status.is_success()) {
             (Target::Default, true) => {
-                let mut counter = TARGET_COUNTER.write();
+                let mut counter = TARGET_COUNTER.write().await;
                 counter.default.requests += 1;
                 counter.default.amount += payment.amount;
             }
             (Target::Fallback, true) => {
-                let mut counter = TARGET_COUNTER.write();
+                let mut counter = TARGET_COUNTER.write().await;
                 counter.fallback.requests += 1;
                 counter.fallback.amount += payment.amount;
             }
@@ -98,7 +101,7 @@ impl BackgroundService for RinhaWorker {
 }
 
 pub fn rinha_worker_service(
-    receiver: Receiver<Payment>,
+    receiver: mpsc::Receiver<Payment>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
 ) -> GenBackgroundService<RinhaWorker> {
     GenBackgroundService::new(

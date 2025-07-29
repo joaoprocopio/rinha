@@ -8,14 +8,14 @@ use pingora::{
     services::listening::Service,
 };
 use std::{sync::Arc, time::Duration};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc;
 
 pub struct RinhaHttp {
-    sender: Arc<Sender<Payment>>,
+    sender: Arc<mpsc::Sender<Payment>>,
 }
 
 impl RinhaHttp {
-    fn new(sender: Sender<Payment>) -> Self {
+    fn new(sender: mpsc::Sender<Payment>) -> Self {
         Self {
             sender: Arc::new(sender),
         }
@@ -45,7 +45,7 @@ impl ServeHttp for RinhaHttp {
                     .unwrap()
             }
             ("GET", b"/payments-summary") => {
-                let target_counter = TARGET_COUNTER.read();
+                let target_counter = TARGET_COUNTER.read().await;
                 let target_count = serde_json::ser::to_vec(&*target_counter).unwrap();
 
                 Response::builder()
@@ -64,7 +64,7 @@ impl ServeHttp for RinhaHttp {
     }
 }
 
-pub fn rinha_http_service(sender: Sender<Payment>) -> Service<RinhaHttp> {
+pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<RinhaHttp> {
     let mut http_service = Service::new("Rinha HTTP Service".into(), RinhaHttp::new(sender));
     let mut socket_options = TcpSocketOptions::default();
     socket_options.tcp_fastopen = Some(10);
