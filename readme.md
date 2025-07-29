@@ -3,14 +3,14 @@
 ## dev setup
 
 ```sh
-docker compose -f docker/compose.processor.yml up -d
+docker compose -f compose.processor.yml up -d
 docker compose up -d
 ```
 
 ## devenv teardown
 
 ```sh
-docker compose -f docker/compose.processor.yml down
+docker compose -f compose.processor.yaml down
 docker compose down
 docker volume prune --all --force
 ```
