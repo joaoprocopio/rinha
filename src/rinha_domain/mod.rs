@@ -1,6 +1,19 @@
+use std::{env, sync::LazyLock};
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+pub static HOST: LazyLock<String> =
+    LazyLock::new(|| env::var("RINHA_HOST").unwrap_or("0.0.0.0".into()));
+pub static PORT: LazyLock<String> =
+    LazyLock::new(|| env::var("RINHA_PORT").unwrap_or("9999".into()));
+pub static ADDR: LazyLock<String> = LazyLock::new(|| format!("{}:{}", *HOST, *PORT));
+
+pub static DEFAULT_BACKEND_ADDR: LazyLock<String> =
+    LazyLock::new(|| env::var("RINHA_DEFAULT_BACKEND_ADDR").unwrap_or("0.0.0.0:8001".into()));
+pub static FALLBACK_BACKEND_ADDR: LazyLock<String> =
+    LazyLock::new(|| env::var("RINHA_FALLBACK_BACKEND_ADDR").unwrap_or("0.0.0.0:8002".into()));
 
 #[derive(Clone, Debug)]
 pub enum Target {

@@ -1,4 +1,4 @@
-use crate::rinha_domain::{Payment, Target, TargetCounter};
+use crate::rinha_domain::{HOST, Payment, Target, TargetCounter};
 use crate::rinha_http::JSON_CONTENT_TYPE;
 use async_trait::async_trait;
 use http::{Method, header};
@@ -74,7 +74,7 @@ async fn process_payment(payment: Payment, load_balancer: Arc<LoadBalancer<Round
     };
 
     if let Err(_) = request_header
-        .append_header(header::HOST, "0.0.0.0")
+        .append_header(header::HOST, HOST.as_str())
         .and(request_header.append_header(header::CONTENT_LENGTH, payment_ser.len()))
         .and(request_header.append_header(header::CONTENT_TYPE, JSON_CONTENT_TYPE))
     {

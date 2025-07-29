@@ -1,4 +1,7 @@
-use crate::{rinha_domain::Payment, rinha_worker::TARGET_COUNTER};
+use crate::{
+    rinha_domain::{ADDR, Payment},
+    rinha_worker::TARGET_COUNTER,
+};
 use async_trait::async_trait;
 use http::{Response, StatusCode, header};
 use pingora::{
@@ -127,7 +130,7 @@ pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<RinhaHttp> {
         user_timeout: Duration::from_secs(85),
     });
 
-    http_service.add_tcp_with_settings("0.0.0.0:9999", socket_options);
+    http_service.add_tcp_with_settings(ADDR.as_str(), socket_options);
 
     http_service
 }

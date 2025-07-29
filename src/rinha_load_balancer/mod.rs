@@ -7,10 +7,10 @@ use pingora::{
 };
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
-use crate::rinha_domain::Target;
+use crate::rinha_domain::{DEFAULT_BACKEND_ADDR, FALLBACK_BACKEND_ADDR, HOST, Target};
 
 fn http_health_check() -> HttpHealthCheck {
-    let mut health_checker = HttpHealthCheck::new("0.0.0.0", false);
+    let mut health_checker = HttpHealthCheck::new(HOST.as_str(), false);
 
     health_checker
         .req
@@ -32,10 +32,10 @@ fn http_health_check() -> HttpHealthCheck {
 }
 
 pub fn rinha_load_balancer_service() -> GenBackgroundService<LoadBalancer<RoundRobin>> {
-    let mut default_backend = Backend::new_with_weight("0.0.0.0:8001", 10).unwrap();
+    let mut default_backend = Backend::new_with_weight(DEFAULT_BACKEND_ADDR.as_str(), 10).unwrap();
     default_backend.ext.insert(Target::Default);
 
-    let mut fallback_backend = Backend::new_with_weight("0.0.0.0:8002", 1).unwrap();
+    let mut fallback_backend = Backend::new_with_weight(FALLBACK_BACKEND_ADDR.as_str(), 1).unwrap();
     fallback_backend.ext.insert(Target::Fallback);
 
     let discovery = discovery::Static::new(BTreeSet::from([default_backend, fallback_backend]));
