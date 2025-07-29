@@ -6,7 +6,7 @@ services:
     hostname: "rinha"
     container_name: "rinha"
     networks:
-      - payment-processor
+      - "payment-processor"
     environment:
       RINHA_HOST: "0.0.0.0"
       RINHA_PORT: "9999"
