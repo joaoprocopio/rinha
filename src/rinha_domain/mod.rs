@@ -1,28 +1,6 @@
-use std::{env, sync::LazyLock};
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-pub static HOST: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_HOST").unwrap_or("0.0.0.0".into()));
-pub static PORT: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_PORT").unwrap_or("9999".into()));
-pub static ADDR: LazyLock<String> = LazyLock::new(|| format!("{}:{}", *HOST, *PORT));
-
-pub static DEFAULT_BACKEND_HOST: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_DEFAULT_BACKEND_HOST").unwrap_or("127.0.0.1".into()));
-pub static DEFAULT_BACKEND_PORT: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_DEFAULT_BACKEND_PORT").unwrap_or("8001".into()));
-pub static DEFAULT_BACKEND_ADDR: LazyLock<String> =
-    LazyLock::new(|| format!("{}:{}", *DEFAULT_BACKEND_HOST, *DEFAULT_BACKEND_PORT));
-
-pub static FALLBACK_BACKEND_HOST: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_FALLBACK_BACKEND_HOST").unwrap_or("127.0.0.1".into()));
-pub static FALLBACK_BACKEND_PORT: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_FALLBACK_BACKEND_PORT").unwrap_or("8002".into()));
-pub static FALLBACK_BACKEND_ADDR: LazyLock<String> =
-    LazyLock::new(|| format!("{}:{}", *FALLBACK_BACKEND_HOST, *FALLBACK_BACKEND_PORT));
 
 #[derive(Debug, Clone)]
 pub enum Target {

@@ -1,13 +1,19 @@
 # rinha
 
-## dev setup
+## dev local setup
+
+```sh
+cargo run
+```
+
+## dev docker setup
 
 ```sh
 docker compose -f compose.processor.yml up -d
 docker compose up -d
 ```
 
-## devenv teardown
+## dev docker teardown
 
 ```sh
 docker compose -f compose.processor.yaml down

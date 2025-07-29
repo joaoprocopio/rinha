@@ -1,4 +1,2 @@
 - [] receber os parametros de url `?from=..&to=..`
 - [] salvar todos os records processados em memórias em uma [`LSM-tree`](https://fjall-rs.github.io/)
-- [] Tokio console
-- [] Tokio tracing
