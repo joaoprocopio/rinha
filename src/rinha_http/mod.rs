@@ -46,10 +46,6 @@ impl ServeHttp for RinhaHttp {
     }
 }
 
-fn internal_server_error_response() -> Response<Vec<u8>> {
-    Response::new("Internal Server Error".into())
-}
-
 fn empty_response_with_status_code<T>(status_code: T) -> Response<Vec<u8>>
 where
     T: TryInto<StatusCode>,
@@ -60,6 +56,14 @@ where
         .header(header::CONTENT_LENGTH, 0)
         .body(vec![])
         .unwrap_or_else(|_| internal_server_error_response())
+}
+
+fn internal_server_error_response() -> Response<Vec<u8>> {
+    Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .header(header::CONTENT_LENGTH, 0)
+        .body(vec![])
+        .unwrap()
 }
 
 async fn payments_summary(_http_session: &mut ServerSession) -> Response<Vec<u8>> {
