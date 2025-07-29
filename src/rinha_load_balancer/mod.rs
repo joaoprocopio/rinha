@@ -38,7 +38,6 @@ pub fn rinha_load_balancer_service() -> GenBackgroundService<LoadBalancer<RoundR
     let mut fallback_backend = Backend::new_with_weight(FALLBACK_BACKEND_ADDR.as_str(), 1).unwrap();
     fallback_backend.ext.insert(Target::Fallback);
 
-    dbg!(&default_backend, &fallback_backend);
     let discovery = discovery::Static::new(BTreeSet::from([default_backend, fallback_backend]));
     let backends = Backends::new(discovery);
 
