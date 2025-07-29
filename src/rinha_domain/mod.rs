@@ -15,13 +15,13 @@ pub static DEFAULT_BACKEND_ADDR: LazyLock<String> =
 pub static FALLBACK_BACKEND_ADDR: LazyLock<String> =
     LazyLock::new(|| env::var("RINHA_FALLBACK_BACKEND_ADDR").unwrap_or("127.0.0.1:8002".into()));
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub enum Target {
     Default,
     Fallback,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Payment {
     #[serde(rename = "correlationId")]
     pub correlation_id: Uuid,
@@ -31,7 +31,7 @@ pub struct Payment {
     pub requested_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct TargetCounter {
     #[serde(rename = "default")]
     pub default: Count,
@@ -39,7 +39,7 @@ pub struct TargetCounter {
     pub fallback: Count,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Count {
     #[serde(rename = "totalRequests")]
     pub requests: u32,
