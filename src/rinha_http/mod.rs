@@ -43,17 +43,26 @@ impl Handlers for RinhaHttpApp {
         let sender = Arc::clone(&self.sender);
 
         let Ok(Some(body)) = http_session.read_request_body().await else {
-            rinha_tracing::dbg!("RinhaHttp::payments: failed while reading request body");
+            rinha_tracing::debug!(
+                rinha_tracing::type_name_of_val!(&Self::payments),
+                "failed while reading request body"
+            );
             return empty_response_with_status_code(StatusCode::NOT_ACCEPTABLE);
         };
 
         let Ok(payment) = serde_json::de::from_slice::<Payment>(&body) else {
-            rinha_tracing::dbg!("RinhaHttp::payments: fail while deserializing request body");
+            rinha_tracing::debug!(
+                rinha_tracing::type_name_of_val!(&Self::payments),
+                "fail while deserializing request body"
+            );
             return empty_response_with_status_code(StatusCode::BAD_REQUEST);
         };
 
         if let Err(_) = sender.send(payment).await {
-            rinha_tracing::dbg!("RinhaHttp::payments: channel send failed");
+            rinha_tracing::debug!(
+                rinha_tracing::type_name_of_val!(&Self::payments),
+                "channel send failed"
+            );
             return empty_response_with_status_code(StatusCode::SERVICE_UNAVAILABLE);
         }
 
@@ -67,7 +76,10 @@ impl Handlers for RinhaHttpApp {
     ) -> Response<Vec<u8>> {
         let target_counter = TARGET_COUNTER.read().await;
         let Ok(target_counter) = serde_json::ser::to_vec(&*target_counter) else {
-            rinha_tracing::dbg!("RinhaHttp::payments_summary: failed serializing payment");
+            rinha_tracing::debug!(
+                rinha_tracing::type_name_of_val!(&Self::payments_summary),
+                "failed serializing payment"
+            );
             return empty_response_with_status_code(StatusCode::BAD_REQUEST);
         };
 
@@ -86,11 +98,17 @@ impl ServeHttp for RinhaHttpApp {
         let header = http_session.req_header();
 
         let Ok(path) = String::from_utf8(header.raw_path().to_vec()) else {
-            rinha_tracing::dbg!("RinhaHttp::response: path is not a valid utf-8");
+            rinha_tracing::debug!(
+                rinha_tracing::type_name_of_val!(&Self::response),
+                "path is not a valid utf-8"
+            );
             return empty_response_with_status_code(StatusCode::BAD_REQUEST);
         };
         let Ok(uri) = Uri::from_str(&path) else {
-            rinha_tracing::dbg!("RinhaHttp::response: path is not a valid uri");
+            rinha_tracing::debug!(
+                rinha_tracing::type_name_of_val!(&Self::response),
+                "path is not a valid uri"
+            );
             return empty_response_with_status_code(StatusCode::BAD_REQUEST);
         };
 
@@ -101,7 +119,10 @@ impl ServeHttp for RinhaHttpApp {
         };
 
         if let Err(_) = http_session.drain_request_body().await {
-            rinha_tracing::dbg!("RinhaHttp::response: failed draining request body");
+            rinha_tracing::debug!(
+                rinha_tracing::type_name_of_val!(&Self::response),
+                "failed draining request body"
+            );
             return empty_response_with_status_code(StatusCode::INTERNAL_SERVER_ERROR);
         }
 
