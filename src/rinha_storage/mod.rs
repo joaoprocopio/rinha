@@ -1,4 +1,4 @@
-use crate::rinha_domain::Payment;
+use crate::rinha_domain::{Payment, Timestamp};
 use fjall as storage;
 use rand::Rng;
 
@@ -11,6 +11,12 @@ impl From<&Payment> for storage::UserValue {
 impl From<&storage::UserValue> for Payment {
     fn from(value: &storage::UserValue) -> Self {
         serde_json::de::from_slice(&value.to_vec()).unwrap()
+    }
+}
+
+impl From<&Timestamp> for storage::UserKey {
+    fn from(value: &Timestamp) -> Self {
+        value.timestamp().to_be_bytes().into()
     }
 }
 
@@ -33,13 +39,11 @@ pub fn setup() {
     for _ in 1..=1000 {
         let payment = Payment {
             correlation_id: uuid::Uuid::new_v4(),
-            requested_at: random_utc_datetime(),
+            requested_at: Timestamp::new(random_utc_datetime()),
             amount: 19.90,
         };
 
-        items
-            .insert(payment.requested_at.timestamp().to_be_bytes(), &payment)
-            .unwrap();
+        items.insert(&payment.requested_at, &payment).unwrap();
     }
 
     for kv in items.range(
