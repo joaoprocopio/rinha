@@ -5,6 +5,7 @@ mod rinha_conf;
 mod rinha_domain;
 mod rinha_http;
 mod rinha_load_balancer;
+mod rinha_storage;
 mod rinha_tracing;
 mod rinha_worker;
 
@@ -13,15 +14,13 @@ use crate::{
     rinha_load_balancer::rinha_load_balancer_service, rinha_worker::rinha_worker_service,
 };
 use pingora::{prelude::*, server::configuration::ServerConf};
-use std::{num::NonZero, thread};
 use tokio::sync::mpsc;
 
 fn main() {
+    rinha_storage::setup();
+
     let server_opt = Opt::default();
-    let mut server_conf = ServerConf::default();
-    server_conf.threads = thread::available_parallelism()
-        .unwrap_or_else(|_| NonZero::new(1).unwrap())
-        .into();
+    let server_conf = ServerConf::default();
 
     let mut server = Server::new_with_opt_and_conf(server_opt, server_conf);
 
