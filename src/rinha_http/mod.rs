@@ -2,8 +2,9 @@ use crate::{rinha_conf::RINHA_ADDR, rinha_domain::Payment, rinha_worker::TARGET_
 use async_trait::async_trait;
 use http::{Response, StatusCode, Uri, header};
 use pingora::{
-    apps::http_app::ServeHttp,
+    apps::http_app::{HttpServer, ServeHttp},
     listeners::TcpSocketOptions,
+    modules::http::compression::ResponseCompressionBuilder,
     protocols::{TcpKeepalive, http::ServerSession},
     services::listening::Service,
 };
@@ -12,11 +13,11 @@ use tokio::sync::mpsc;
 
 pub const JSON_CONTENT_TYPE: &'static str = "application/json";
 
-pub struct RinhaHttp {
+pub struct RinhaHttpApp {
     sender: Arc<mpsc::Sender<Payment>>,
 }
 
-impl RinhaHttp {
+impl RinhaHttpApp {
     const EMPTY_BODY: Vec<u8> = vec![];
     const EMPTY_BODY_LEN: i16 = 0;
 
@@ -87,7 +88,7 @@ impl RinhaHttp {
 }
 
 #[async_trait]
-impl ServeHttp for RinhaHttp {
+impl ServeHttp for RinhaHttpApp {
     async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
         let header = http_session.req_header();
 
@@ -115,8 +116,10 @@ impl ServeHttp for RinhaHttp {
     }
 }
 
-pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<RinhaHttp> {
-    let mut http_service = Service::new("Rinha HTTP Service".into(), RinhaHttp::new(sender));
+pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<HttpServer<RinhaHttpApp>> {
+    let mut server = HttpServer::new_app(RinhaHttpApp::new(sender));
+    server.add_module(ResponseCompressionBuilder::enable(7));
+    let mut service = Service::new("Rinha HTTP Service".into(), server);
 
     let mut socket_options = TcpSocketOptions::default();
     socket_options.tcp_fastopen = Some(10);
@@ -128,7 +131,7 @@ pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<RinhaHttp> {
         user_timeout: Duration::from_secs(85),
     });
 
-    http_service.add_tcp_with_settings(RINHA_ADDR.as_str(), socket_options);
+    service.add_tcp_with_settings(RINHA_ADDR.as_str(), socket_options);
 
-    http_service
+    service
 }
