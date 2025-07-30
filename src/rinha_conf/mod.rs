@@ -1,36 +1,11 @@
-use std::{env, sync::LazyLock};
-
 #[cfg(not(debug_assertions))]
 pub const RINHA_PROD: bool = true;
 
 #[cfg(debug_assertions)]
 pub const RINHA_PROD: bool = false;
 
-pub static RINHA_HOST: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_HOST").unwrap_or("0.0.0.0".into()));
-pub static RINHA_PORT: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_PORT").unwrap_or("9999".into()));
-pub static RINHA_ADDR: LazyLock<String> =
-    LazyLock::new(|| format!("{}:{}", *RINHA_HOST, *RINHA_PORT));
+pub const RINHA_HOST: &str = "0.0.0.0";
+pub const RINHA_ADDR: &str = "0.0.0.0:9999";
 
-pub static RINHA_DEFAULT_BACKEND_HOST: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_DEFAULT_BACKEND_HOST").unwrap_or("127.0.0.1".into()));
-pub static RINHA_DEFAULT_BACKEND_PORT: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_DEFAULT_BACKEND_PORT").unwrap_or("8001".into()));
-pub static RINHA_DEFAULT_BACKEND_ADDR: LazyLock<String> = LazyLock::new(|| {
-    format!(
-        "{}:{}",
-        *RINHA_DEFAULT_BACKEND_HOST, *RINHA_DEFAULT_BACKEND_PORT
-    )
-});
-
-pub static RINHA_FALLBACK_BACKEND_HOST: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_FALLBACK_BACKEND_HOST").unwrap_or("127.0.0.1".into()));
-pub static RINHA_FALLBACK_BACKEND_PORT: LazyLock<String> =
-    LazyLock::new(|| env::var("RINHA_FALLBACK_BACKEND_PORT").unwrap_or("8002".into()));
-pub static RINHA_FALLBACK_BACKEND_ADDR: LazyLock<String> = LazyLock::new(|| {
-    format!(
-        "{}:{}",
-        *RINHA_FALLBACK_BACKEND_HOST, *RINHA_FALLBACK_BACKEND_PORT
-    )
-});
+pub const RINHA_DEFAULT_BACKEND_ADDR: &str = "127.0.0.1:8001";
+pub const RINHA_FALLBACK_BACKEND_ADDR: &str = "127.0.0.1:8002";

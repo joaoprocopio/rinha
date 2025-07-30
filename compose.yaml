@@ -6,13 +6,6 @@ services:
     platform: "linux/amd64"
     networks:
       - "payment-processor"
-    environment:
-      RINHA_HOST: "0.0.0.0"
-      RINHA_PORT: "9999"
-      RINHA_DEFAULT_BACKEND_HOST: "127.0.0.1"
-      RINHA_DEFAULT_BACKEND_PORT: "8001"
-      RINHA_FALLBACK_BACKEND_HOST: "127.0.0.1"
-      RINHA_FALLBACK_BACKEND_PORT: "8002"
     ports:
       - target: "9999"
         published: "9999"

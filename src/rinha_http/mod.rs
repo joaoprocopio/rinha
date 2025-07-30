@@ -13,7 +13,7 @@ use pingora::{
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 
-pub const JSON_CONTENT_TYPE: &'static str = "application/json";
+pub const JSON_CONTENT_TYPE: &str = "application/json";
 const EMPTY_BODY: Vec<u8> = vec![];
 const EMPTY_BODY_LEN: i16 = 0;
 
@@ -157,7 +157,7 @@ pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<HttpServer<R
         user_timeout: Duration::from_secs(85),
     });
 
-    service.add_tcp_with_settings(RINHA_ADDR.as_str(), socket_options);
+    service.add_tcp_with_settings(RINHA_ADDR, socket_options);
 
     service
 }
