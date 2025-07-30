@@ -1,5 +1,11 @@
 use std::{env, sync::LazyLock};
 
+#[cfg(not(debug_assertions))]
+pub const RINHA_PROD: bool = true;
+
+#[cfg(debug_assertions)]
+pub const RINHA_PROD: bool = false;
+
 pub static RINHA_HOST: LazyLock<String> =
     LazyLock::new(|| env::var("RINHA_HOST").unwrap_or("0.0.0.0".into()));
 pub static RINHA_PORT: LazyLock<String> =

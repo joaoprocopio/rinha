@@ -9,14 +9,24 @@ mod rinha_tracing;
 mod rinha_worker;
 
 use crate::{
-    rinha_domain::Payment, rinha_http::rinha_http_service,
+    rinha_conf::RINHA_PROD, rinha_domain::Payment, rinha_http::rinha_http_service,
     rinha_load_balancer::rinha_load_balancer_service, rinha_worker::rinha_worker_service,
 };
 use pingora::{prelude::*, server::configuration::ServerConf};
+use std::{num::NonZero, thread};
 use tokio::sync::mpsc;
 
 fn main() {
-    let mut server = Server::new_with_opt_and_conf(Opt::default(), ServerConf::default());
+    let mut server_opt = Opt::default();
+    server_opt.daemon = RINHA_PROD;
+
+    let mut server_conf = ServerConf::default();
+    server_conf.daemon = RINHA_PROD;
+    server_conf.threads = thread::available_parallelism()
+        .unwrap_or_else(|_| NonZero::new(1).unwrap())
+        .into();
+
+    let mut server = Server::new_with_opt_and_conf(server_opt, server_conf);
 
     server.bootstrap();
 
