@@ -1,3 +1,7 @@
+use crate::{
+    rinha_conf::{RINHA_DEFAULT_BACKEND_ADDR, RINHA_FALLBACK_BACKEND_ADDR, RINHA_HOST},
+    rinha_domain::Target,
+};
 use http::Uri;
 use pingora::{
     http::ResponseHeader,
@@ -6,11 +10,6 @@ use pingora::{
     services::background::GenBackgroundService,
 };
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
-
-use crate::{
-    rinha_conf::{RINHA_DEFAULT_BACKEND_ADDR, RINHA_FALLBACK_BACKEND_ADDR, RINHA_HOST},
-    rinha_domain::Target,
-};
 
 fn http_health_check() -> HttpHealthCheck {
     let mut health_checker = HttpHealthCheck::new(RINHA_HOST.as_str(), false);

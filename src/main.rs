@@ -5,6 +5,7 @@ mod rinha_conf;
 mod rinha_domain;
 mod rinha_http;
 mod rinha_load_balancer;
+mod rinha_tracing;
 mod rinha_worker;
 
 use crate::{
