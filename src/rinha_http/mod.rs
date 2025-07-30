@@ -145,7 +145,6 @@ where
 pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<HttpServer<RinhaHttpApp>> {
     let mut server = HttpServer::new_app(RinhaHttpApp::new(sender));
     server.add_module(ResponseCompressionBuilder::enable(7));
-
     let mut service = Service::new("Rinha HTTP Service".into(), server);
 
     let mut socket_options = TcpSocketOptions::default();

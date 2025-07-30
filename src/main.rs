@@ -13,12 +13,11 @@ use crate::{
     rinha_load_balancer::rinha_load_balancer_service, rinha_worker::rinha_worker_service,
 };
 use pingora::{prelude::*, server::configuration::ServerConf};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 fn main() {
-    let opt = Opt::default();
-    let conf = ServerConf::default();
-    let mut server = Server::new_with_opt_and_conf(opt, conf);
+    let mut server = Server::new_with_opt_and_conf(Opt::default(), ServerConf::default());
 
     server.bootstrap();
 
@@ -26,11 +25,15 @@ fn main() {
 
     let rinha_load_balancer = rinha_load_balancer_service();
     let rinha_http = rinha_http_service(sender);
-    let rinha_worker = rinha_worker_service(receiver, rinha_load_balancer.task());
+    let rinha_worker = rinha_worker_service(
+        receiver,
+        rinha_load_balancer.task(),
+        Arc::clone(&server.configuration),
+    );
 
     server.add_service(rinha_http);
     server.add_service(rinha_load_balancer);
-
     server.add_service(rinha_worker);
+
     server.run_forever();
 }

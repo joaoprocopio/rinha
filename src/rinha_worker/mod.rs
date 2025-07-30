@@ -6,13 +6,19 @@ use crate::{
 };
 use async_trait::async_trait;
 use http::{Method, header};
-use pingora::connectors::http::Connector;
 use pingora::http::RequestHeader;
 use pingora::lb::LoadBalancer;
 use pingora::prelude::{HttpPeer, RoundRobin};
 use pingora::server::ShutdownWatch;
 use pingora::services::background::{BackgroundService, GenBackgroundService};
-use std::sync::{Arc, LazyLock};
+use pingora::{
+    connectors::{ConnectorOptions, http::Connector},
+    server::configuration::ServerConf,
+};
+use std::{
+    ops::Deref,
+    sync::{Arc, LazyLock},
+};
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 
@@ -22,16 +28,19 @@ pub static TARGET_COUNTER: LazyLock<RwLock<TargetCounter>> =
 pub struct RinhaWorker {
     receiver: RwLock<mpsc::Receiver<Payment>>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
+    connector: Arc<Connector>,
 }
 
 impl RinhaWorker {
     fn new(
         receiver: mpsc::Receiver<Payment>,
         load_balancer: Arc<LoadBalancer<RoundRobin>>,
+        connector: Connector,
     ) -> Self {
         Self {
             receiver: RwLock::new(receiver),
             load_balancer: load_balancer,
+            connector: Arc::new(connector),
         }
     }
 
@@ -53,8 +62,8 @@ impl RinhaWorker {
             return;
         };
 
-        let peer = HttpPeer::new(backend.addr.clone(), false, backend.addr.to_string());
-        let connector = Connector::new(None);
+        let peer = HttpPeer::new(backend.addr.to_string(), false, backend.addr.to_string());
+        let connector = Arc::clone(&self.connector);
 
         let Ok((mut http, _)) = connector.get_http_session(&peer).await else {
             rinha_tracing::debug!(
@@ -80,10 +89,11 @@ impl RinhaWorker {
             return;
         };
 
-        if let Err(_) = request_header
+        if request_header
             .append_header(header::HOST, RINHA_HOST.as_str())
             .and(request_header.append_header(header::CONTENT_LENGTH, payment_ser.len()))
             .and(request_header.append_header(header::CONTENT_TYPE, JSON_CONTENT_TYPE))
+            .is_err()
         {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::process_payment),
@@ -92,11 +102,12 @@ impl RinhaWorker {
             return;
         };
 
-        if let Err(_) = http
+        if http
             .write_request_header(Box::new(request_header))
             .await
             .and(http.write_request_body(payment_ser.into(), true).await)
             .and(http.finish_request_body().await)
+            .is_err()
         {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::process_payment),
@@ -105,7 +116,7 @@ impl RinhaWorker {
             return;
         };
 
-        if let Err(_) = http.read_response_header().await {
+        if http.read_response_header().await.is_err() {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::process_payment),
                 "failed to read header"
@@ -165,9 +176,13 @@ impl BackgroundService for RinhaWorker {
 pub fn rinha_worker_service(
     receiver: mpsc::Receiver<Payment>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
+    server_configuration: Arc<ServerConf>,
 ) -> GenBackgroundService<RinhaWorker> {
+    let connector_options = ConnectorOptions::from_server_conf(server_configuration.as_ref());
+    let connector = Connector::new(Some(connector_options));
+
     GenBackgroundService::new(
         "Rinha Worker Background Service".into(),
-        Arc::new(RinhaWorker::new(receiver, load_balancer)),
+        Arc::new(RinhaWorker::new(receiver, load_balancer, connector)),
     )
 }
