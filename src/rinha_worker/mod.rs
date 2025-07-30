@@ -15,10 +15,7 @@ use pingora::{
     connectors::{ConnectorOptions, http::Connector},
     server::configuration::ServerConf,
 };
-use std::{
-    ops::Deref,
-    sync::{Arc, LazyLock},
-};
+use std::sync::{Arc, LazyLock};
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 
@@ -178,7 +175,7 @@ pub fn rinha_worker_service(
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     server_configuration: Arc<ServerConf>,
 ) -> GenBackgroundService<RinhaWorker> {
-    let connector_options = ConnectorOptions::from_server_conf(server_configuration.as_ref());
+    let connector_options = ConnectorOptions::from_server_conf(&server_configuration);
     let connector = Connector::new(Some(connector_options));
 
     GenBackgroundService::new(
