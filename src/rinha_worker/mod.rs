@@ -16,14 +16,13 @@ use pingora::{
     server::configuration::ServerConf,
 };
 use std::sync::{Arc, LazyLock};
-use tokio::sync::RwLock;
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, RwLock, mpsc};
 
 pub static TARGET_COUNTER: LazyLock<RwLock<TargetCounter>> =
     LazyLock::new(|| RwLock::new(TargetCounter::default()));
 
 pub struct RinhaWorker {
-    receiver: mpsc::Receiver<Payment>,
+    receiver: Mutex<mpsc::Receiver<Payment>>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     connector: Arc<Connector>,
 }
@@ -35,7 +34,7 @@ impl RinhaWorker {
         connector: Connector,
     ) -> Self {
         Self {
-            receiver: receiver,
+            receiver: Mutex::new(receiver),
             load_balancer: load_balancer,
             connector: Arc::new(connector),
         }
@@ -155,7 +154,7 @@ impl RinhaWorker {
 #[async_trait]
 impl BackgroundService for RinhaWorker {
     async fn start(&self, mut shutdown: ShutdownWatch) {
-        let mut receiver = self.receiver;
+        let mut receiver = self.receiver.lock().await;
 
         loop {
             tokio::select! {
