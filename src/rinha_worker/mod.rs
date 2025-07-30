@@ -23,7 +23,7 @@ pub static TARGET_COUNTER: LazyLock<RwLock<TargetCounter>> =
     LazyLock::new(|| RwLock::new(TargetCounter::default()));
 
 pub struct RinhaWorker {
-    receiver: RwLock<mpsc::Receiver<Payment>>,
+    receiver: mpsc::Receiver<Payment>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     connector: Arc<Connector>,
 }
@@ -35,14 +35,14 @@ impl RinhaWorker {
         connector: Connector,
     ) -> Self {
         Self {
-            receiver: RwLock::new(receiver),
+            receiver: receiver,
             load_balancer: load_balancer,
             connector: Arc::new(connector),
         }
     }
 
     async fn process_payment(&self, payment: Payment) {
-        let load_balancer = Arc::clone(&self.load_balancer);
+        let load_balancer = self.load_balancer.clone();
 
         let Some(backend) = load_balancer.select(b"", 8) else {
             rinha_tracing::debug!(
@@ -60,7 +60,7 @@ impl RinhaWorker {
         };
 
         let peer = HttpPeer::new(backend.addr.to_string(), false, backend.addr.to_string());
-        let connector = Arc::clone(&self.connector);
+        let connector = self.connector.clone();
 
         let Ok((mut http, _)) = connector.get_http_session(&peer).await else {
             rinha_tracing::debug!(
@@ -155,7 +155,7 @@ impl RinhaWorker {
 #[async_trait]
 impl BackgroundService for RinhaWorker {
     async fn start(&self, mut shutdown: ShutdownWatch) {
-        let mut receiver = self.receiver.write().await;
+        let mut receiver = self.receiver;
 
         loop {
             tokio::select! {

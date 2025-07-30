@@ -40,7 +40,7 @@ trait Handlers {
 
 impl Handlers for RinhaHttpApp {
     async fn payments(&self, http_session: &mut ServerSession, _uri: Uri) -> Response<Vec<u8>> {
-        let sender = Arc::clone(&self.sender);
+        let sender = self.sender.clone();
 
         let Ok(Some(body)) = http_session.read_request_body().await else {
             rinha_tracing::debug!(
@@ -58,7 +58,7 @@ impl Handlers for RinhaHttpApp {
             return empty_response_with_status_code(StatusCode::BAD_REQUEST);
         };
 
-        if let Err(_) = sender.send(payment).await {
+        if sender.send(payment).await.is_err() {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::payments),
                 "channel send failed"
@@ -118,7 +118,7 @@ impl ServeHttp for RinhaHttpApp {
             _ => empty_response_with_status_code(StatusCode::NOT_FOUND),
         };
 
-        if let Err(_) = http_session.drain_request_body().await {
+        if http_session.drain_request_body().await.is_err() {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::response),
                 "failed draining request body"
