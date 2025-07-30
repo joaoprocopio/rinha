@@ -1,33 +1,22 @@
-use std::ops::Deref;
-
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
-pub type UTC = chrono::Utc;
-pub type UTCDateTime = chrono::DateTime<UTC>;
-
 #[derive(Debug)]
-pub struct Timestamp(UTCDateTime);
+pub struct DateTime(chrono::DateTime<chrono::Utc>);
 
-impl Timestamp {
-    pub fn new(dt: UTCDateTime) -> Self {
+impl DateTime {
+    pub fn wrap(dt: chrono::DateTime<chrono::Utc>) -> Self {
         Self(dt)
-    }
-
-    pub fn now() -> Self {
-        Self(UTC::now())
     }
 }
 
-impl Deref for Timestamp {
-    type Target = UTCDateTime;
-
-    fn deref(&self) -> &Self::Target {
+impl AsRef<chrono::DateTime<chrono::Utc>> for DateTime {
+    fn as_ref(&self) -> &chrono::DateTime<chrono::Utc> {
         &self.0
     }
 }
 
-impl Serialize for Timestamp {
+impl Serialize for DateTime {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -36,12 +25,14 @@ impl Serialize for Timestamp {
     }
 }
 
-impl<'de> Deserialize<'de> for Timestamp {
+impl<'de> Deserialize<'de> for DateTime {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Ok(Timestamp(UTCDateTime::deserialize(deserializer)?))
+        Ok(DateTime(chrono::DateTime::<chrono::Utc>::deserialize(
+            deserializer,
+        )?))
     }
 }
 
@@ -57,8 +48,12 @@ pub struct Payment {
     pub correlation_id: Uuid,
     #[serde(rename = "amount")]
     pub amount: f32,
-    #[serde(rename = "requestedAt", default = "Timestamp::now")]
-    pub requested_at: Timestamp,
+    #[serde(rename = "requestedAt", default = "default_requested_at")]
+    pub requested_at: DateTime,
+}
+
+fn default_requested_at() -> DateTime {
+    DateTime::wrap(chrono::Utc::now())
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]

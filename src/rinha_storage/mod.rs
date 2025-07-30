@@ -1,22 +1,32 @@
-use crate::rinha_domain::{Payment, Timestamp};
+use crate::rinha_domain::{DateTime, Payment};
 use fjall as storage;
 use rand::Rng;
 
-impl From<&Payment> for storage::UserValue {
+impl From<&Payment> for fjall::Slice {
     fn from(value: &Payment) -> Self {
-        serde_json::ser::to_vec(&value).unwrap().into()
+        serde_json::ser::to_vec(value).unwrap().into()
     }
 }
 
-impl From<&storage::UserValue> for Payment {
-    fn from(value: &storage::UserValue) -> Self {
-        serde_json::de::from_slice(&value.to_vec()).unwrap()
+impl From<&fjall::Slice> for Payment {
+    fn from(value: &fjall::Slice) -> Self {
+        serde_json::de::from_slice(value).unwrap()
     }
 }
 
-impl From<&Timestamp> for storage::UserKey {
-    fn from(value: &Timestamp) -> Self {
-        value.timestamp().to_be_bytes().into()
+impl From<&DateTime> for fjall::Slice {
+    fn from(value: &DateTime) -> Self {
+        value.as_ref().timestamp().to_be_bytes().into()
+    }
+}
+
+impl From<&fjall::Slice> for DateTime {
+    fn from(value: &fjall::Slice) -> Self {
+        let value = value.as_ref();
+        let value = i64::from_be_bytes(value.try_into().unwrap());
+        let value = chrono::DateTime::from_timestamp(value, 0).unwrap();
+
+        DateTime::wrap(value)
     }
 }
 
@@ -39,23 +49,22 @@ pub fn setup() {
     for _ in 1..=1000 {
         let payment = Payment {
             correlation_id: uuid::Uuid::new_v4(),
-            requested_at: Timestamp::new(random_utc_datetime()),
+            requested_at: DateTime::wrap(random_utc_datetime()),
             amount: 19.90,
         };
 
         items.insert(&payment.requested_at, &payment).unwrap();
     }
 
-    for kv in items.range(
-        (chrono::Utc::now() - chrono::Duration::days(30))
-            .timestamp()
-            .to_be_bytes()..=chrono::Utc::now().timestamp().to_be_bytes(),
-    ) {
-        let kv = kv.unwrap();
-        let requested_at = &*kv.0;
-        let requested_at = i64::from_be_bytes(requested_at.try_into().unwrap());
-        let requested_at = chrono::DateTime::from_timestamp(requested_at, 0);
+    let start_ts = DateTime::wrap(chrono::Utc::now() - chrono::Duration::days(30));
+    let end_ts = DateTime::wrap(chrono::Utc::now());
 
+    let start_key: fjall::Slice = (&start_ts).into();
+    let end_key: fjall::Slice = (&end_ts).into();
+
+    for kv in items.range(start_key..=end_key) {
+        let kv = kv.unwrap();
+        let requested_at: DateTime = (&kv.0).into();
         let payment: Payment = (&kv.1).into();
         dbg!(requested_at, payment);
     }
