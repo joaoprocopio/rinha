@@ -1,9 +1,3 @@
-#[cfg(not(debug_assertions))]
-pub const RINHA_PROD: bool = true;
-
-#[cfg(debug_assertions)]
-pub const RINHA_PROD: bool = false;
-
 pub const RINHA_HOST: &str = "0.0.0.0";
 pub const RINHA_ADDR: &str = "0.0.0.0:9999";
 

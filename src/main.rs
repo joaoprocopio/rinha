@@ -9,7 +9,7 @@ mod rinha_tracing;
 mod rinha_worker;
 
 use crate::{
-    rinha_conf::RINHA_PROD, rinha_domain::Payment, rinha_http::rinha_http_service,
+    rinha_domain::Payment, rinha_http::rinha_http_service,
     rinha_load_balancer::rinha_load_balancer_service, rinha_worker::rinha_worker_service,
 };
 use pingora::{prelude::*, server::configuration::ServerConf};
@@ -17,11 +17,8 @@ use std::{num::NonZero, thread};
 use tokio::sync::mpsc;
 
 fn main() {
-    let mut server_opt = Opt::default();
-    server_opt.daemon = RINHA_PROD;
-
+    let server_opt = Opt::default();
     let mut server_conf = ServerConf::default();
-    server_conf.daemon = RINHA_PROD;
     server_conf.threads = thread::available_parallelism()
         .unwrap_or_else(|_| NonZero::new(1).unwrap())
         .into();
