@@ -46,7 +46,7 @@ pub fn setup() {
         .open_partition("payments", storage::PartitionCreateOptions::default())
         .unwrap();
 
-    for _ in 1..=1000 {
+    for _ in 1..=100 {
         let payment = Payment {
             correlation_id: uuid::Uuid::new_v4(),
             requested_at: DateTime::wrap(random_utc_datetime()),
@@ -56,16 +56,18 @@ pub fn setup() {
         items.insert(&payment.requested_at, &payment).unwrap();
     }
 
-    let start_ts = DateTime::wrap(chrono::Utc::now() - chrono::Duration::days(30));
-    let end_ts = DateTime::wrap(chrono::Utc::now());
-
-    let start_key: fjall::Slice = (&start_ts).into();
-    let end_key: fjall::Slice = (&end_ts).into();
-
-    for kv in items.range(start_key..=end_key) {
+    for kv in items.range(
+        DateTime::wrap(chrono::Utc::now() - chrono::Duration::days(30))
+            .as_ref()
+            .timestamp()
+            .to_be_bytes()
+            ..=DateTime::wrap(chrono::Utc::now())
+                .as_ref()
+                .timestamp()
+                .to_be_bytes(),
+    ) {
         let kv = kv.unwrap();
         let requested_at: DateTime = (&kv.0).into();
         let payment: Payment = (&kv.1).into();
-        dbg!(requested_at, payment);
     }
 }

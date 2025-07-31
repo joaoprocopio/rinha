@@ -5,8 +5,8 @@ use uuid::Uuid;
 pub struct DateTime(chrono::DateTime<chrono::Utc>);
 
 impl DateTime {
-    pub fn wrap(dt: chrono::DateTime<chrono::Utc>) -> Self {
-        Self(dt)
+    pub fn wrap(date_time: chrono::DateTime<chrono::Utc>) -> Self {
+        Self(date_time)
     }
 }
 
