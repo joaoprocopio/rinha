@@ -235,7 +235,7 @@ pub fn rinha_http_service(
         user_timeout: Duration::from_secs(85),
     });
 
-    service.add_tcp_with_settings(RINHA_ADDR, socket_options);
+    service.add_tcp_with_settings(RINHA_ADDR.as_str(), socket_options);
 
     service
 }

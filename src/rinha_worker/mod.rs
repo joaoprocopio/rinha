@@ -83,7 +83,7 @@ impl RinhaWorker {
         };
 
         if request_header
-            .append_header(header::HOST, RINHA_HOST)
+            .append_header(header::HOST, RINHA_HOST.as_str())
             .and(request_header.append_header(header::CONTENT_LENGTH, payment_ser.len()))
             .and(request_header.append_header(header::CONTENT_TYPE, JSON_CONTENT_TYPE))
             .is_err()

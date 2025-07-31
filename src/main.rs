@@ -18,6 +18,7 @@ use tokio::sync::mpsc;
 
 fn main() {
     rinha_storage::bootstrap();
+    rinha_conf::bootstrap();
 
     let server_opt = Opt::default();
     let server_conf = ServerConf::default();

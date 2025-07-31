@@ -2,24 +2,25 @@ services:
   rinha:
     build:
       context: "."
-      dockerfile: "./dockerfile"
+      dockerfile: "./dockerfile.dev"
+    volumes:
+      - "rinha:/app"
+    environment:
+      RINHA_HOST: "0.0.0.0"
+      RINHA_PORT: "9999"
+      RINHA_DEFAULT_BACKEND_HOST: "payment-processor-default"
+      RINHA_DEFAULT_BACKEND_PORT: "8001"
+      RINHA_FALLBACK_BACKEND_HOST: "payment-processor-fallback"
+      RINHA_FALLBACK_BACKEND_PORT: "8002"
     platform: "linux/amd64"
     networks:
       - "payment-processor"
     ports:
-      - target: "9999"
-        published: "9999"
-        protocol: "tcp"
-        mode: "host"
-    deploy:
-      resources:
-        limits:
-          cpus: "1.5"
-          memory: "350MB"
-        reservations:
-          cpus: "1.5"
-          memory: "350MB"
+      - "9999:9999"
 
 networks:
   payment-processor:
     external: true
+
+volumes:
+  rinha:
