@@ -1,6 +1,4 @@
-use crate::{
-    rinha_conf::RINHA_ADDR, rinha_domain::Payment, rinha_tracing, rinha_worker::TARGET_COUNTER,
-};
+use crate::{rinha_conf::RINHA_ADDR, rinha_domain::Payment, rinha_tracing};
 use async_trait::async_trait;
 use http::{Response, StatusCode, Uri, header};
 use pingora::{
@@ -74,21 +72,22 @@ impl Handlers for RinhaHttpApp {
         _http_session: &mut ServerSession,
         _uri: Uri,
     ) -> Response<Vec<u8>> {
-        let target_counter = TARGET_COUNTER.read().await;
-        let Ok(target_counter) = serde_json::ser::to_vec(&*target_counter) else {
-            rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::payments_summary),
-                "failed serializing payment"
-            );
-            return empty_response_with_status_code(StatusCode::BAD_REQUEST);
-        };
+        // let target_counter = TARGET_COUNTER.read().await;
+        // let Ok(target_counter) = serde_json::ser::to_vec(&*target_counter) else {
+        //     rinha_tracing::debug!(
+        //         rinha_tracing::type_name_of_val!(&Self::payments_summary),
+        //         "failed serializing payment"
+        //     );
+        //     return empty_response_with_status_code(StatusCode::BAD_REQUEST);
+        // };
 
-        Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
-            .header(header::CONTENT_LENGTH, target_counter.len())
-            .body(target_counter.into())
-            .unwrap_or_else(|_| empty_response_with_status_code(StatusCode::INTERNAL_SERVER_ERROR))
+        // Response::builder()
+        //     .status(StatusCode::OK)
+        //     .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
+        //     .header(header::CONTENT_LENGTH, target_counter.len())
+        //     .body(target_counter.into())
+        //     .unwrap_or_else(|_| empty_response_with_status_code(StatusCode::INTERNAL_SERVER_ERROR))
+        empty_response_with_status_code(StatusCode::OK)
     }
 }
 

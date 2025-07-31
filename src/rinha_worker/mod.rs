@@ -1,8 +1,8 @@
 use crate::{
     rinha_conf::RINHA_HOST,
-    rinha_domain::{Payment, Target, TargetCounter},
+    rinha_domain::{Payment, Target},
     rinha_http::JSON_CONTENT_TYPE,
-    rinha_tracing,
+    rinha_storage, rinha_tracing,
 };
 use async_trait::async_trait;
 use http::{Method, header};
@@ -15,11 +15,8 @@ use pingora::{
     connectors::{ConnectorOptions, http::Connector},
     server::configuration::ServerConf,
 };
-use std::sync::{Arc, LazyLock};
-use tokio::sync::{Mutex, RwLock, mpsc};
-
-pub static TARGET_COUNTER: LazyLock<RwLock<TargetCounter>> =
-    LazyLock::new(|| RwLock::new(TargetCounter::default()));
+use std::sync::Arc;
+use tokio::sync::{Mutex, mpsc};
 
 pub struct RinhaWorker {
     receiver: Mutex<mpsc::Receiver<Payment>>,
@@ -50,7 +47,7 @@ impl RinhaWorker {
             );
             return;
         };
-        let Some(target) = backend.ext.get::<Target>() else {
+        let Some(_target) = backend.ext.get::<Target>() else {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::process_payment),
                 "failed to get Target backend ext"
@@ -136,18 +133,30 @@ impl RinhaWorker {
             return;
         }
 
-        let mut counter = TARGET_COUNTER.write().await;
+        let Ok(Some(_)) = pingora_runtime::current_handle()
+            .spawn_blocking(move || -> Option<()> {
+                let storage = rinha_storage::get_handle();
 
-        match target {
-            Target::Default => {
-                counter.default.requests += 1;
-                counter.default.amount += payment.amount;
-            }
-            Target::Fallback => {
-                counter.fallback.requests += 1;
-                counter.fallback.amount += payment.amount;
-            }
-        }
+                let (key, value): (fjall::Slice, fjall::Slice) =
+                    match ((&payment.requested_at).try_into(), (&payment).try_into()) {
+                        (Ok(key), Ok(value)) => (key, value),
+                        _ => return None,
+                    };
+
+                if storage.insert(key, value).is_err() {
+                    return None;
+                };
+
+                Some(())
+            })
+            .await
+        else {
+            rinha_tracing::debug!(
+                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                "error while inserting to storage"
+            );
+            return;
+        };
     }
 }
 

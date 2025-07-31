@@ -17,7 +17,7 @@ use pingora::{prelude::*, server::configuration::ServerConf};
 use tokio::sync::mpsc;
 
 fn main() {
-    rinha_storage::setup();
+    rinha_storage::bootstrap();
 
     let server_opt = Opt::default();
     let server_conf = ServerConf::default();
