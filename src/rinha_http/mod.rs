@@ -1,5 +1,10 @@
-use crate::{rinha_conf::RINHA_ADDR, rinha_domain::Payment, rinha_tracing};
+use crate::{
+    rinha_conf::RINHA_ADDR,
+    rinha_domain::{DateTime, Payment, TargetCounter},
+    rinha_storage, rinha_tracing,
+};
 use async_trait::async_trait;
+use fjall::Slice;
 use http::{Response, StatusCode, Uri, header};
 use pingora::{
     apps::http_app::{HttpServer, ServeHttp},
@@ -70,24 +75,78 @@ impl Handlers for RinhaHttpApp {
     async fn payments_summary(
         &self,
         _http_session: &mut ServerSession,
-        _uri: Uri,
+        uri: Uri,
     ) -> Response<Vec<u8>> {
-        // let target_counter = TARGET_COUNTER.read().await;
-        // let Ok(target_counter) = serde_json::ser::to_vec(&*target_counter) else {
-        //     rinha_tracing::debug!(
-        //         rinha_tracing::type_name_of_val!(&Self::payments_summary),
-        //         "failed serializing payment"
-        //     );
-        //     return empty_response_with_status_code(StatusCode::BAD_REQUEST);
-        // };
+        let mut from: Option<DateTime> = None;
+        let mut to: Option<DateTime> = None;
 
-        // Response::builder()
-        //     .status(StatusCode::OK)
-        //     .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
-        //     .header(header::CONTENT_LENGTH, target_counter.len())
-        //     .body(target_counter.into())
-        //     .unwrap_or_else(|_| empty_response_with_status_code(StatusCode::INTERNAL_SERVER_ERROR))
-        empty_response_with_status_code(StatusCode::OK)
+        if let Some(query) = uri.query() {
+            let query = url::form_urlencoded::parse(query.as_bytes());
+
+            for (key, value) in query {
+                match &*key {
+                    "from" => {
+                        from = Some(DateTime::wrap(
+                            chrono::DateTime::parse_from_rfc3339(&value)
+                                .map(|dt| dt.with_timezone(&chrono::Utc))
+                                .unwrap(),
+                        ))
+                    }
+                    "to" => {
+                        to = Some(DateTime::wrap(
+                            chrono::DateTime::parse_from_rfc3339(&value)
+                                .map(|dt| dt.with_timezone(&chrono::Utc))
+                                .unwrap(),
+                        ))
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        let target_counter = pingora_runtime::current_handle()
+            .spawn_blocking(move || {
+                let storage = rinha_storage::get_handle();
+                let mut target_counter = TargetCounter::default();
+
+                if let (Some(from), Some(to)) = (from, to) {
+                    let from: Slice = (&from).try_into().unwrap();
+                    let to: Slice = (&to).try_into().unwrap();
+
+                    for key_value in storage.range(from..=to) {
+                        let key_value = key_value.unwrap();
+                        let payment: Payment = (&key_value.1).try_into().unwrap();
+                        target_counter.default.requests += 1;
+                        target_counter.default.amount += payment.amount;
+                    }
+                } else {
+                    for value in storage.values() {
+                        let value = value.unwrap();
+                        let payment: Payment = (&value).try_into().unwrap();
+                        target_counter.default.requests += 1;
+                        target_counter.default.amount += payment.amount;
+                    }
+                }
+
+                target_counter
+            })
+            .await
+            .unwrap();
+
+        let Ok(target_counter) = serde_json::ser::to_vec(&target_counter) else {
+            rinha_tracing::debug!(
+                rinha_tracing::type_name_of_val!(&Self::payments_summary),
+                "failed serializing payment"
+            );
+            return empty_response_with_status_code(StatusCode::BAD_REQUEST);
+        };
+
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
+            .header(header::CONTENT_LENGTH, target_counter.len())
+            .body(target_counter.into())
+            .unwrap_or_else(|_| empty_response_with_status_code(StatusCode::INTERNAL_SERVER_ERROR))
     }
 }
 
