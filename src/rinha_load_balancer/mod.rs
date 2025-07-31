@@ -36,7 +36,7 @@ fn http_health_check() -> HttpHealthCheck {
 }
 
 fn resolve_socket_addr(addr: &str) -> SocketAddr {
-    let socket_addrs = addr.to_socket_addrs().unwrap();
+    let socket_addrs: Vec<std::net::SocketAddr> = addr.to_socket_addrs().unwrap().collect();
 
     SocketAddr::Inet(socket_addrs.into_iter().next().unwrap())
 }

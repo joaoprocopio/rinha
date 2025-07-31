@@ -1,10 +1,11 @@
 services:
   rinha:
+    platform: "linux/amd64"
     build:
       context: "."
       dockerfile: "./dockerfile.dev"
-    volumes:
-      - "rinha:/app"
+    networks:
+      - "payment-processor"
     environment:
       RINHA_HOST: "0.0.0.0"
       RINHA_PORT: "9999"
@@ -12,15 +13,20 @@ services:
       RINHA_DEFAULT_BACKEND_PORT: "8001"
       RINHA_FALLBACK_BACKEND_HOST: "payment-processor-fallback"
       RINHA_FALLBACK_BACKEND_PORT: "8002"
-    platform: "linux/amd64"
-    networks:
-      - "payment-processor"
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: ./Cargo.toml
+          target: /app/Cargo.toml
+        - action: rebuild
+          path: ./Cargo.lock
+          target: /app/Cargo.lock
     ports:
       - "9999:9999"
 
 networks:
   payment-processor:
     external: true
-
-volumes:
-  rinha:
