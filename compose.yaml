@@ -9,21 +9,12 @@ services:
     environment:
       RINHA_HOST: "0.0.0.0"
       RINHA_PORT: "9999"
-      RINHA_DEFAULT_BACKEND_HOST: "payment-processor-default"
+      RINHA_DEFAULT_BACKEND_HOST: "host.docker.internal"
       RINHA_DEFAULT_BACKEND_PORT: "8001"
-      RINHA_FALLBACK_BACKEND_HOST: "payment-processor-fallback"
+      RINHA_FALLBACK_BACKEND_HOST: "host.docker.internal"
       RINHA_FALLBACK_BACKEND_PORT: "8002"
-    develop:
-      watch:
-        - action: sync+restart
-          path: ./src
-          target: /app/src
-        - action: rebuild
-          path: ./Cargo.toml
-          target: /app/Cargo.toml
-        - action: rebuild
-          path: ./Cargo.lock
-          target: /app/Cargo.lock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "9999:9999"
 

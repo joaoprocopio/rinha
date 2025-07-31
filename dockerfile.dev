@@ -1,15 +1,11 @@
 FROM rust:1.88
 
-RUN useradd -ms /bin/sh -u 1001 app
-USER app
-
-WORKDIR /app
-COPY --chown=app:app . .
-
-
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     curl
+
+WORKDIR /app
+COPY . .
 
 CMD ["cargo", "run"]
