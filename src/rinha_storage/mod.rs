@@ -31,7 +31,8 @@ impl TryFrom<&DateTime> for Slice {
     type Error = ();
 
     fn try_from(value: &DateTime) -> Result<Self, Self::Error> {
-        Ok(value.as_ref().timestamp().to_be_bytes().into())
+        let nanos = value.as_ref().timestamp_nanos_opt().ok_or(())?;
+        Ok(nanos.to_be_bytes().into())
     }
 }
 
@@ -39,13 +40,9 @@ impl TryFrom<&Slice> for DateTime {
     type Error = ();
 
     fn try_from(value: &Slice) -> Result<Self, Self::Error> {
-        let Ok(value) = value.as_ref().try_into() else {
-            return Err(());
-        };
+        let value = value.as_ref().try_into().or(Err(()))?;
         let value = i64::from_be_bytes(value);
-        let Some(value) = chrono::DateTime::from_timestamp(value, 0) else {
-            return Err(());
-        };
+        let value = chrono::DateTime::from_timestamp_nanos(value);
 
         Ok(DateTime::wrap(value))
     }

@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use fjall::Slice;
-use http::{Response, StatusCode, Uri, header};
+use http::{Method, Response, StatusCode, header};
 use pingora::{
     apps::http_app::{HttpServer, ServeHttp},
     listeners::TcpSocketOptions,
@@ -13,12 +13,13 @@ use pingora::{
     protocols::{TcpKeepalive, http::ServerSession},
     services::listening::Service,
 };
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc;
+use url::form_urlencoded;
 
 pub const JSON_CONTENT_TYPE: &str = "application/json";
 const EMPTY_BODY: Vec<u8> = vec![];
-const EMPTY_BODY_LEN: i16 = 0;
+const EMPTY_BODY_LEN: usize = 0;
 
 pub struct RinhaHttpApp {
     sender: Arc<mpsc::Sender<PaymentRequest>>,
@@ -33,16 +34,12 @@ impl RinhaHttpApp {
 }
 
 trait Handlers {
-    async fn payments(&self, http_session: &mut ServerSession, uri: Uri) -> Response<Vec<u8>>;
-    async fn payments_summary(
-        &self,
-        http_session: &mut ServerSession,
-        uri: Uri,
-    ) -> Response<Vec<u8>>;
+    async fn payments(&self, http_session: &mut ServerSession) -> Response<Vec<u8>>;
+    async fn payments_summary(&self, http_session: &mut ServerSession) -> Response<Vec<u8>>;
 }
 
 impl Handlers for RinhaHttpApp {
-    async fn payments(&self, http_session: &mut ServerSession, _uri: Uri) -> Response<Vec<u8>> {
+    async fn payments(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
         let sender = self.sender.clone();
 
         let Ok(Some(body)) = http_session.read_request_body().await else {
@@ -72,16 +69,12 @@ impl Handlers for RinhaHttpApp {
         empty_response_with_status_code(StatusCode::OK)
     }
 
-    async fn payments_summary(
-        &self,
-        _http_session: &mut ServerSession,
-        uri: Uri,
-    ) -> Response<Vec<u8>> {
+    async fn payments_summary(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
         let mut from: Option<DateTime> = None;
         let mut to: Option<DateTime> = None;
 
-        if let Some(query) = uri.query() {
-            let query = url::form_urlencoded::parse(query.as_bytes());
+        if let Some(query) = http_session.req_header().uri.query() {
+            let query = form_urlencoded::parse(query.as_bytes());
 
             for (key, value) in query {
                 match &*key {
@@ -114,8 +107,8 @@ impl Handlers for RinhaHttpApp {
                     let to: Slice = (&to).try_into().unwrap();
 
                     for key_value in storage.range(from..=to) {
-                        let key_value = key_value.unwrap();
-                        let payment: Payment = (&key_value.1).try_into().unwrap();
+                        let (_, value) = key_value.unwrap();
+                        let payment: Payment = (&value).try_into().unwrap();
 
                         match payment.target {
                             Target::Default => {
@@ -173,24 +166,9 @@ impl ServeHttp for RinhaHttpApp {
     async fn response(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
         let header = http_session.req_header();
 
-        let Ok(path) = String::from_utf8(header.raw_path().to_vec()) else {
-            rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::response),
-                "path is not a valid utf-8"
-            );
-            return empty_response_with_status_code(StatusCode::BAD_REQUEST);
-        };
-        let Ok(uri) = Uri::from_str(&path) else {
-            rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::response),
-                "path is not a valid uri"
-            );
-            return empty_response_with_status_code(StatusCode::BAD_REQUEST);
-        };
-
-        let response = match (header.method.as_str(), uri.path()) {
-            ("POST", "/payments") => self.payments(http_session, uri).await,
-            ("GET", "/payments-summary") => self.payments_summary(http_session, uri).await,
+        let response = match (header.method.clone(), header.uri.path()) {
+            (Method::POST, "/payments") => self.payments(http_session).await,
+            (Method::GET, "/payments-summary") => self.payments_summary(http_session).await,
             _ => empty_response_with_status_code(StatusCode::NOT_FOUND),
         };
 
@@ -223,6 +201,7 @@ pub fn rinha_http_service(
 ) -> Service<HttpServer<RinhaHttpApp>> {
     let mut server = HttpServer::new_app(RinhaHttpApp::new(sender));
     server.add_module(ResponseCompressionBuilder::enable(7));
+
     let mut service = Service::new("Rinha HTTP Service".into(), server);
 
     let mut socket_options = TcpSocketOptions::default();
