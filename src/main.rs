@@ -22,12 +22,11 @@ fn main() {
 
     let server_opt = Opt::default();
     let server_conf = ServerConf::default();
-
     let mut server = Server::new_with_opt_and_conf(server_opt, server_conf);
 
     server.bootstrap();
 
-    let (sender, receiver) = mpsc::channel::<PaymentRequest>(size_of::<PaymentRequest>() * 512);
+    let (sender, receiver) = mpsc::channel::<PaymentRequest>(size_of::<PaymentRequest>() * 4096);
 
     let rinha_load_balancer = rinha_load_balancer_service();
     let rinha_http = rinha_http_service(sender);

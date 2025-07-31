@@ -47,7 +47,7 @@ pub struct PaymentRequest {
     #[serde(rename = "correlationId")]
     pub correlation_id: Uuid,
     #[serde(rename = "amount")]
-    pub amount: f32,
+    pub amount: f64,
     #[serde(rename = "requestedAt", default = "default_requested_at")]
     pub requested_at: DateTime,
 }
@@ -57,7 +57,7 @@ pub struct Payment {
     #[serde(rename = "correlationId")]
     pub correlation_id: Uuid,
     #[serde(rename = "amount")]
-    pub amount: f32,
+    pub amount: f64,
     #[serde(rename = "requestedAt", default = "default_requested_at")]
     pub requested_at: DateTime,
     #[serde(rename = "target")]
@@ -79,7 +79,7 @@ pub struct TargetCounter {
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Count {
     #[serde(rename = "totalRequests")]
-    pub requests: u32,
+    pub requests: u64,
     #[serde(rename = "totalAmount")]
-    pub amount: f32,
+    pub amount: f64,
 }
