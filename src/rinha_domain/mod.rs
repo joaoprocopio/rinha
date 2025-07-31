@@ -36,10 +36,20 @@ impl<'de> Deserialize<'de> for DateTime {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Target {
     Default,
     Fallback,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PaymentRequest {
+    #[serde(rename = "correlationId")]
+    pub correlation_id: Uuid,
+    #[serde(rename = "amount")]
+    pub amount: f32,
+    #[serde(rename = "requestedAt", default = "default_requested_at")]
+    pub requested_at: DateTime,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -50,6 +60,8 @@ pub struct Payment {
     pub amount: f32,
     #[serde(rename = "requestedAt", default = "default_requested_at")]
     pub requested_at: DateTime,
+    #[serde(rename = "target")]
+    pub target: Target,
 }
 
 fn default_requested_at() -> DateTime {

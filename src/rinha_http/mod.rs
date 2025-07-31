@@ -1,6 +1,6 @@
 use crate::{
     rinha_conf::RINHA_ADDR,
-    rinha_domain::{DateTime, Payment, TargetCounter},
+    rinha_domain::{DateTime, Payment, PaymentRequest, Target, TargetCounter},
     rinha_storage, rinha_tracing,
 };
 use async_trait::async_trait;
@@ -21,11 +21,11 @@ const EMPTY_BODY: Vec<u8> = vec![];
 const EMPTY_BODY_LEN: i16 = 0;
 
 pub struct RinhaHttpApp {
-    sender: Arc<mpsc::Sender<Payment>>,
+    sender: Arc<mpsc::Sender<PaymentRequest>>,
 }
 
 impl RinhaHttpApp {
-    fn new(sender: mpsc::Sender<Payment>) -> Self {
+    fn new(sender: mpsc::Sender<PaymentRequest>) -> Self {
         Self {
             sender: Arc::new(sender),
         }
@@ -53,7 +53,7 @@ impl Handlers for RinhaHttpApp {
             return empty_response_with_status_code(StatusCode::NOT_ACCEPTABLE);
         };
 
-        let Ok(payment) = serde_json::de::from_slice::<Payment>(&body) else {
+        let Ok(payment_request) = serde_json::de::from_slice::<PaymentRequest>(&body) else {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::payments),
                 "fail while deserializing request body"
@@ -61,7 +61,7 @@ impl Handlers for RinhaHttpApp {
             return empty_response_with_status_code(StatusCode::BAD_REQUEST);
         };
 
-        if sender.send(payment).await.is_err() {
+        if sender.send(payment_request).await.is_err() {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::payments),
                 "channel send failed"
@@ -116,15 +116,33 @@ impl Handlers for RinhaHttpApp {
                     for key_value in storage.range(from..=to) {
                         let key_value = key_value.unwrap();
                         let payment: Payment = (&key_value.1).try_into().unwrap();
-                        target_counter.default.requests += 1;
-                        target_counter.default.amount += payment.amount;
+
+                        match payment.target {
+                            Target::Default => {
+                                target_counter.default.requests += 1;
+                                target_counter.default.amount += payment.amount;
+                            }
+                            Target::Fallback => {
+                                target_counter.fallback.requests += 1;
+                                target_counter.fallback.amount += payment.amount;
+                            }
+                        }
                     }
                 } else {
                     for value in storage.values() {
                         let value = value.unwrap();
                         let payment: Payment = (&value).try_into().unwrap();
-                        target_counter.default.requests += 1;
-                        target_counter.default.amount += payment.amount;
+
+                        match payment.target {
+                            Target::Default => {
+                                target_counter.default.requests += 1;
+                                target_counter.default.amount += payment.amount;
+                            }
+                            Target::Fallback => {
+                                target_counter.fallback.requests += 1;
+                                target_counter.fallback.amount += payment.amount;
+                            }
+                        }
                     }
                 }
 
@@ -200,7 +218,9 @@ where
         .unwrap()
 }
 
-pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<HttpServer<RinhaHttpApp>> {
+pub fn rinha_http_service(
+    sender: mpsc::Sender<PaymentRequest>,
+) -> Service<HttpServer<RinhaHttpApp>> {
     let mut server = HttpServer::new_app(RinhaHttpApp::new(sender));
     server.add_module(ResponseCompressionBuilder::enable(7));
     let mut service = Service::new("Rinha HTTP Service".into(), server);

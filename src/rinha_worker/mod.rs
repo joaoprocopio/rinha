@@ -1,6 +1,6 @@
 use crate::{
     rinha_conf::RINHA_HOST,
-    rinha_domain::{Payment, Target},
+    rinha_domain::{Payment, PaymentRequest, Target},
     rinha_http::JSON_CONTENT_TYPE,
     rinha_storage, rinha_tracing,
 };
@@ -19,14 +19,14 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 
 pub struct RinhaWorker {
-    receiver: Mutex<mpsc::Receiver<Payment>>,
+    receiver: Mutex<mpsc::Receiver<PaymentRequest>>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     connector: Arc<Connector>,
 }
 
 impl RinhaWorker {
     fn new(
-        receiver: mpsc::Receiver<Payment>,
+        receiver: mpsc::Receiver<PaymentRequest>,
         load_balancer: Arc<LoadBalancer<RoundRobin>>,
         connector: Connector,
     ) -> Self {
@@ -37,7 +37,7 @@ impl RinhaWorker {
         }
     }
 
-    async fn process_payment(&self, payment: Payment) {
+    async fn process_payment(&self, payment_request: PaymentRequest) {
         let load_balancer = self.load_balancer.clone();
 
         let Some(backend) = load_balancer.select(b"", 8) else {
@@ -47,7 +47,7 @@ impl RinhaWorker {
             );
             return;
         };
-        let Some(_target) = backend.ext.get::<Target>() else {
+        let Some(target) = backend.ext.get::<Target>().cloned() else {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::process_payment),
                 "failed to get Target backend ext"
@@ -66,7 +66,7 @@ impl RinhaWorker {
             return;
         };
 
-        let Ok(payment_ser) = serde_json::ser::to_vec(&payment) else {
+        let Ok(payment_ser) = serde_json::ser::to_vec(&payment_request) else {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::process_payment),
                 "failed to serialize payment struct"
@@ -137,6 +137,14 @@ impl RinhaWorker {
             .spawn_blocking(move || -> Option<()> {
                 let storage = rinha_storage::get_handle();
 
+                // Create payment record with target information for database storage
+                let payment = Payment {
+                    correlation_id: payment_request.correlation_id,
+                    amount: payment_request.amount,
+                    requested_at: payment_request.requested_at,
+                    target: target,
+                };
+
                 let (key, value): (fjall::Slice, fjall::Slice) =
                     match ((&payment.requested_at).try_into(), (&payment).try_into()) {
                         (Ok(key), Ok(value)) => (key, value),
@@ -170,8 +178,8 @@ impl BackgroundService for RinhaWorker {
                 _ = shutdown.changed() => {
                     break;
                 }
-                Some(payment) = receiver.recv() => {
-                    self.process_payment(payment).await
+                Some(payment_request) = receiver.recv() => {
+                    self.process_payment(payment_request).await
                 }
             }
         }
@@ -179,7 +187,7 @@ impl BackgroundService for RinhaWorker {
 }
 
 pub fn rinha_worker_service(
-    receiver: mpsc::Receiver<Payment>,
+    receiver: mpsc::Receiver<PaymentRequest>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     server_configuration: Arc<ServerConf>,
 ) -> GenBackgroundService<RinhaWorker> {
