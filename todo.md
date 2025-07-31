@@ -1,1 +1,5 @@
 - [] trocal fjall por btreemap
+- [] https://docs.rs/tokio/latest/tokio/ (runtime)
+- [] https://docs.rs/hyper/latest/hyper/ (tcp/http client/server)
+- [] https://docs.rs/tower/latest/tower/ (middlewares)
+- [] https://docs.rs/axum/latest/axum/ (server)
