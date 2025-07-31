@@ -24,12 +24,13 @@ docker volume prune --all --force
 ## build & push
 
 ```sh
+docker login
+
 export TIMESTAMP=$(date '+%Y%m%d%H%M%S')
 export ARCH="amd64"
 export PLATFORM="linux/$ARCH"
 export IMAGE="joaoprocopio/rinha:$ARCH-$TIMESTAMP"
 
-docker login
 docker build --platform $PLATFORM --tag $IMAGE .
 docker push $IMAGE
 ```
