@@ -1,4 +1,10 @@
-use crate::{rinha_chan, rinha_core::Result, rinha_domain::Payment};
+use crate::{
+    rinha_chan,
+    rinha_core::Result,
+    rinha_domain::{Backends, Payment, TargetCounter},
+    rinha_net::JSON_CONTENT_TYPE,
+    rinha_storage,
+};
 use chrono::{DateTime, TimeZone, Utc};
 use http_body_util::{BodyExt, Empty, Full, combinators::BoxBody};
 use hyper::{
@@ -8,8 +14,6 @@ use hyper::{
 };
 use std::convert::Infallible;
 
-pub const JSON_CONTENT_TYPE: &str = "application/json";
-
 pub async fn payments(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>> {
     let body = req.collect().await?.aggregate();
     let payment: Payment = serde_json::from_reader(body.reader())?;
@@ -18,7 +22,6 @@ pub async fn payments(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, 
 
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
         .body(Empty::<Bytes>::new().boxed())
         .map_err(|err| err.into())
 }
@@ -32,34 +35,44 @@ pub async fn payments_summary(
         .ok_or("Unable to parse from")?;
     let mut to = Utc::now();
 
-    dbg!(&from);
-    dbg!(&to);
     if let Some(query) = req.uri().query() {
         for param in query.split("&") {
-            if let Some(str_dt) = param.strip_prefix("from=") {
-                if let Ok(dt) =
-                    DateTime::parse_from_rfc3339(str_dt).map(|dt| dt.with_timezone(&Utc))
-                {
+            if let Some(dt) = param.strip_prefix("from=") {
+                if let Ok(dt) = DateTime::parse_from_rfc3339(dt).map(|dt| dt.with_timezone(&Utc)) {
                     from = dt;
                 }
-            }
-
-            if let Some(str_dt) = param.strip_prefix("to=") {
-                if let Ok(dt) =
-                    DateTime::parse_from_rfc3339(str_dt).map(|dt| dt.with_timezone(&Utc))
-                {
+            } else if let Some(dt) = param.strip_prefix("to=") {
+                if let Ok(dt) = DateTime::parse_from_rfc3339(dt).map(|dt| dt.with_timezone(&Utc)) {
                     to = dt;
                 }
             }
         }
     };
 
-    dbg!(&from);
-    dbg!(&to);
+    let mut target_counter = TargetCounter::default();
+
+    let storage = rinha_storage::get_storage();
+    let storage = storage.read().await;
+
+    let default_storage = storage.get(&Backends::Default).ok_or("Failed to get")?;
+    let fallback_storage = storage.get(&Backends::Fallback).ok_or("Failed to get")?;
+
+    for (_, amount) in default_storage.range(from..=to) {
+        target_counter.default.requests += 1;
+        target_counter.default.amount += amount;
+    }
+
+    for (_, amount) in fallback_storage.range(from..=to) {
+        target_counter.default.requests += 1;
+        target_counter.default.amount += amount;
+    }
+
+    let body = serde_json::to_string(&target_counter)?;
 
     Response::builder()
+        .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
         .status(StatusCode::OK)
-        .body(Full::from("abc").boxed())
+        .body(Full::from(body).boxed())
         .map_err(|err| err.into())
 }
 

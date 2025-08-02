@@ -4,6 +4,7 @@ use crate::{
     rinha_chan, rinha_conf,
     rinha_core::Result,
     rinha_domain::{Backends, Payment},
+    rinha_net::JSON_CONTENT_TYPE,
     rinha_storage,
 };
 use http_body_util::{BodyExt, Full};
@@ -35,19 +36,20 @@ async fn process_payment(payment: Payment) -> Result<()> {
     let req = Request::builder()
         .method(Method::POST)
         .header(header::HOST, authority.as_str())
+        .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
         .uri(uri)
         .body(Full::<Bytes>::from(payment_ser).boxed())?;
 
     let res = sender.send_request(req).await?;
 
-    dbg!(res.headers());
-
-    let storage = rinha_storage::get_storage();
-    let mut storage = storage.write().await;
-    let storage = storage
-        .get_mut(&Backends::Default)
-        .ok_or("Unable to get mutable reference to storage")?;
-    storage.insert(payment.requested_at, payment.amount);
+    if res.status().is_success() {
+        let storage = rinha_storage::get_storage();
+        let mut storage = storage.write().await;
+        let storage = storage
+            .get_mut(&Backends::Default)
+            .ok_or("Unable to get mutable reference to storage")?;
+        storage.insert(payment.requested_at, payment.amount);
+    }
 
     Ok(())
 }
