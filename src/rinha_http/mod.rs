@@ -12,7 +12,6 @@ pub const JSON_CONTENT_TYPE: &str = "application/json";
 pub async fn payments(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>> {
     let body = req.collect().await?.aggregate();
     let payment: Payment = serde_json::from_reader(body.reader())?;
-
     let sender = rinha_chan::get_sender();
     sender.send(payment)?;
 

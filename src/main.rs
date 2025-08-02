@@ -8,31 +8,22 @@ mod rinha_domain;
 mod rinha_http;
 mod rinha_net;
 mod rinha_storage;
+mod rinha_worker;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt().with_thread_ids(true).init();
     rinha_core::bootstrap();
 
+    {
+        let worker_task = rinha_worker::task();
+        tokio::spawn(worker_task);
+    }
+
     let addr = rinha_net::resolve_socket_addr(rinha_conf::RINHA_ADDR.as_str()).await?;
     let tcp_socket = rinha_net::create_tcp_socket(addr)?;
     let tcp_listener = TcpListener::from_std(tcp_socket.into())?;
 
-    tokio::spawn(worker());
-
     let accept_loop = rinha_net::accept_loop(tcp_listener);
     tokio::spawn(accept_loop).await?
-}
-
-async fn worker() {
-    let receiver = rinha_chan::get_receiver();
-    let mut receiver = receiver.lock().await;
-
-    loop {
-        tokio::select! {
-            Some(payment) = receiver.recv() => {
-                dbg!(payment);
-            }
-        };
-    }
 }
