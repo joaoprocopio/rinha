@@ -14,7 +14,7 @@ mod rinha_conf;
 mod rinha_core;
 mod rinha_net;
 
-async fn muxer(req: Request<Incoming>) -> Result<Response<BoxBody>> {
+async fn router(req: Request<Incoming>) -> Result<Response<BoxBody>> {
     match (req.method(), req.uri().path()) {
         (&Method::GET, "/") => {
             let body = Full::new(Bytes::from("hello, world!"))
@@ -34,25 +34,31 @@ async fn muxer(req: Request<Incoming>) -> Result<Response<BoxBody>> {
     }
 }
 
+async fn accept_loop(tcp_listener: TcpListener) -> Result<()> {
+    let mut http = http1::Builder::new();
+    http.pipeline_flush(true);
+
+    let service = service_fn(router);
+
+    loop {
+        let (tcp_stream, _) = tcp_listener.accept().await?;
+        let http = http.clone();
+
+        tokio::spawn(async move {
+            let io = TokioIo::new(tcp_stream);
+            if let Err(_) = http.serve_connection(io, service).await {};
+        });
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     rinha_conf::bootstrap().await;
 
     let addr: SocketAddr = rinha_conf::RINHA_ADDR.parse()?;
-    let socket = rinha_net::create_tcp_socket(addr)?;
-    let listener = TcpListener::from_std(socket.into())?;
+    let tcp_socket = rinha_net::create_tcp_socket(addr)?;
+    let tcp_listener = TcpListener::from_std(tcp_socket.into())?;
 
-    loop {
-        let (tcp, _) = listener.accept().await?;
-        let io = TokioIo::new(tcp);
-
-        tokio::task::spawn(async move {
-            if let Err(err) = http1::Builder::new()
-                .serve_connection(io, service_fn(muxer))
-                .await
-            {
-                println!("error serving connection {:?}", err)
-            }
-        });
-    }
+    let accept_loop = accept_loop(tcp_listener);
+    tokio::spawn(accept_loop).await?
 }
