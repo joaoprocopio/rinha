@@ -10,6 +10,8 @@ mod rinha_storage;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    tracing_subscriber::fmt().with_thread_ids(true).init();
+
     rinha_conf::bootstrap();
     rinha_storage::bootstrap();
 
