@@ -15,7 +15,7 @@ pub type BoxBody<D = hyper::body::Bytes, E = hyper::Error> =
 
 pub async fn router(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>> {
     match (req.method(), req.uri().path()) {
-        (&Method::POST, "/payments") => rinha_http::payments(),
+        (&Method::POST, "/payments") => rinha_http::payments(req).await,
         (&Method::GET, "/ping") => rinha_http::ping(),
         _ => rinha_http::not_found_error(),
     }
