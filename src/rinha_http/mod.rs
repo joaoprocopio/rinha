@@ -1,5 +1,5 @@
-use crate::{rinha_core::Result, rinha_domain::Payment, rinha_net::BoxBody};
-use http_body_util::{BodyExt, Empty, Full};
+use crate::{rinha_core::Result, rinha_domain::Payment, rinha_net::full};
+use http_body_util::{BodyExt, Empty, Full, combinators::BoxBody};
 use hyper::{
     Request, Response, StatusCode,
     body::{Buf, Bytes, Incoming},
@@ -20,7 +20,7 @@ pub async fn payments(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, 
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
-        .body(Full::new(payment.into()).boxed())
+        .body(full(payment))
         .map_err(|err| err.into())
 }
 

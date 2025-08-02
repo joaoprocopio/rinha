@@ -1,4 +1,5 @@
 use crate::{rinha_core::Result, rinha_http};
+use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{
     Method, Request, Response,
     body::{Bytes, Incoming},
@@ -9,17 +10,6 @@ use hyper_util::rt::TokioIo;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::{convert::Infallible, net::SocketAddr};
 use tokio::net::{TcpListener, ToSocketAddrs, lookup_host};
-
-pub type BoxBody<D = hyper::body::Bytes, E = hyper::Error> =
-    http_body_util::combinators::BoxBody<D, E>;
-
-pub async fn router(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>> {
-    match (req.method(), req.uri().path()) {
-        (&Method::POST, "/payments") => rinha_http::payments(req).await,
-        (&Method::GET, "/ping") => rinha_http::ping(),
-        _ => rinha_http::not_found_error(),
-    }
-}
 
 pub async fn resolve_socket_addr<T: ToSocketAddrs>(addr: T) -> Result<SocketAddr> {
     let mut addrs = lookup_host(addr).await?;
@@ -57,9 +47,23 @@ pub async fn accept_loop(tcp_listener: TcpListener) -> Result<()> {
 
         tokio::spawn(async move {
             let io = TokioIo::new(tcp_stream);
-            if let Err(_) = http.serve_connection(io, service).await {
-                //
+            if let Err(err) = http.serve_connection(io, service).await {
+                dbg!(err);
             };
         });
     }
+}
+
+pub async fn router(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>> {
+    match (req.method(), req.uri().path()) {
+        (&Method::POST, "/payments") => rinha_http::payments(req).await,
+        (&Method::GET, "/ping") => rinha_http::ping(),
+        _ => rinha_http::not_found_error(),
+    }
+}
+
+pub fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, Infallible> {
+    Full::new(chunk.into())
+        .map_err(|never| match never {})
+        .boxed()
 }
