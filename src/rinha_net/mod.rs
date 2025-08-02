@@ -1,5 +1,5 @@
 use crate::{rinha_core::Result, rinha_http};
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
+use http_body_util::combinators::BoxBody;
 use hyper::{
     Method, Request, Response,
     body::{Bytes, Incoming},
@@ -27,6 +27,8 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
     let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
     let backlog = 4096;
 
+    socket.set_reuse_address(true)?;
+    socket.set_reuse_port(true)?;
     socket.set_tcp_nodelay(true)?;
     socket.set_nonblocking(true)?;
     socket.bind(&addr)?;
@@ -60,10 +62,4 @@ pub async fn router(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, In
         (&Method::GET, "/ping") => rinha_http::ping(),
         _ => rinha_http::not_found_error(),
     }
-}
-
-pub fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, Infallible> {
-    Full::new(chunk.into())
-        .map_err(|never| match never {})
-        .boxed()
 }
