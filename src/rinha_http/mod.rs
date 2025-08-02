@@ -3,6 +3,8 @@ use http_body_util::{BodyExt, Empty, Full};
 use hyper::{Response, StatusCode, body::Bytes};
 use std::convert::Infallible;
 
+pub fn payments() -> Result<Response<BoxBody<Bytes, Infallible>>> {}
+
 pub fn ping() -> Result<Response<BoxBody<Bytes, Infallible>>> {
     Response::builder()
         .status(StatusCode::OK)
