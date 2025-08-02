@@ -75,7 +75,9 @@ pub async fn accept_loop(tcp_listener: TcpListener) -> Result<()> {
 
         tokio::spawn(async move {
             let io = TokioIo::new(tcp_stream);
-            if let Err(_) = http.serve_connection(io, service).await {};
+            if let Err(_) = http.serve_connection(io, service).await {
+                //
+            };
         });
     }
 }

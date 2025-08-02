@@ -29,7 +29,7 @@ pub static RINHA_FALLBACK_BACKEND_ADDR: LazyLock<String> = LazyLock::new(|| {
     )
 });
 
-pub async fn bootstrap() {
+pub fn bootstrap() {
     LazyLock::force(&RINHA_HOST);
     LazyLock::force(&RINHA_PORT);
     LazyLock::force(&RINHA_ADDR);
