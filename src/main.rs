@@ -1,3 +1,4 @@
+use crate::{rinha_core::Result, rinha_net::BoxBody};
 use http_body_util::{BodyExt, Empty, Full};
 use hyper::{
     Method, Request, Response, StatusCode,
@@ -6,12 +7,12 @@ use hyper::{
     service::service_fn,
 };
 use hyper_util::rt::TokioIo;
-use std::error::Error;
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
-type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
-type BoxError = Box<dyn Error + Send + Sync>;
-type Result<T, E = BoxError> = std::result::Result<T, E>;
+mod rinha_conf;
+mod rinha_core;
+mod rinha_net;
 
 async fn muxer(req: Request<Incoming>) -> Result<Response<BoxBody>> {
     match (req.method(), req.uri().path()) {
@@ -35,7 +36,11 @@ async fn muxer(req: Request<Incoming>) -> Result<Response<BoxBody>> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let listener = TcpListener::bind("0.0.0.0:9999").await?;
+    rinha_conf::bootstrap().await;
+
+    let addr: SocketAddr = rinha_conf::RINHA_ADDR.parse()?;
+    let socket = rinha_net::create_tcp_socket(addr)?;
+    let listener = TcpListener::from_std(socket.into())?;
 
     loop {
         let (tcp, _) = listener.accept().await?;
