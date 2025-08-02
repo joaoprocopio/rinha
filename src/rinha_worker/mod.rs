@@ -1,13 +1,13 @@
 use std::str::FromStr;
 
-use crate::{rinha_chan, rinha_conf, rinha_core::Result, rinha_domain::Payment};
-use http_body_util::{BodyExt, Empty};
-use hyper::{
-    Method, Request, Uri,
-    body::{Buf, Bytes},
-    client::conn::http1,
-    header,
+use crate::{
+    rinha_chan, rinha_conf,
+    rinha_core::Result,
+    rinha_domain::{Backends, Payment},
+    rinha_storage,
 };
+use http_body_util::{BodyExt, Full};
+use hyper::{Method, Request, Uri, body::Bytes, client::conn::http1, header};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
 
@@ -24,31 +24,30 @@ async fn process_payment(payment: Payment) -> Result<()> {
     });
 
     let uri = format!(
-        "http://{}/admin/payments-summary",
+        "http://{}/payments",
         *rinha_conf::RINHA_DEFAULT_BACKEND_ADDR
     );
     let uri = Uri::from_str(uri.as_str())?;
-    dbg!(&uri);
     let authority = uri.authority().ok_or("Unable to get authority")?;
-    dbg!(&authority);
+
+    let payment_ser = serde_json::to_string(&payment)?;
 
     let req = Request::builder()
-        .method(Method::GET)
+        .method(Method::POST)
         .header(header::HOST, authority.as_str())
         .uri(uri)
-        .header("X-Rinha-Token", "123")
-        .body(Empty::<Bytes>::new())?;
+        .body(Full::<Bytes>::from(payment_ser).boxed())?;
 
     let res = sender.send_request(req).await?;
 
     dbg!(res.headers());
 
-    let body = res.collect().await?;
-    let body = body.aggregate();
-    let body = body.chunk();
-    let body = String::from_utf8_lossy(body);
-
-    dbg!(&body);
+    let storage = rinha_storage::get_storage();
+    let mut storage = storage.write().await;
+    let storage = storage
+        .get_mut(&Backends::Default)
+        .ok_or("Unable to get mutable reference to storage")?;
+    storage.insert(payment.requested_at, payment.amount);
 
     Ok(())
 }

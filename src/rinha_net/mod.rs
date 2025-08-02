@@ -59,6 +59,7 @@ pub async fn accept_loop(tcp_listener: TcpListener) -> Result<()> {
 pub async fn router(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>> {
     match (req.method(), req.uri().path()) {
         (&Method::POST, "/payments") => rinha_http::payments(req).await,
+        (&Method::GET, "/payments-summary") => rinha_http::payments_summary(req).await,
         (&Method::GET, "/ping") => rinha_http::ping(),
         _ => rinha_http::not_found_error(),
     }

@@ -1,4 +1,4 @@
-use crate::rinha_domain::Target;
+use crate::rinha_domain::Backends;
 use chrono::{DateTime, Utc};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -6,13 +6,13 @@ use std::{
 };
 use tokio::sync::RwLock;
 
-type Storage = HashMap<Target, BTreeMap<DateTime<Utc>, f64>>;
+type Storage = HashMap<Backends, BTreeMap<DateTime<Utc>, f64>>;
 
 static STORAGE: LazyLock<Arc<RwLock<Storage>>> = LazyLock::new(|| {
     let mut hash_map: Storage = HashMap::with_capacity(2);
 
-    hash_map.insert(Target::Default, BTreeMap::new());
-    hash_map.insert(Target::Fallback, BTreeMap::new());
+    hash_map.insert(Backends::Default, BTreeMap::new());
+    hash_map.insert(Backends::Fallback, BTreeMap::new());
 
     Arc::new(RwLock::new(hash_map))
 });
