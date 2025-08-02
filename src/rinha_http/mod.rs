@@ -156,7 +156,7 @@ impl Handlers for RinhaHttpApp {
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
             .header(header::CONTENT_LENGTH, target_counter.len())
-            .body(target_counter.into())
+            .body(target_counter)
             .unwrap_or_else(|_| empty_response_with_status_code(StatusCode::INTERNAL_SERVER_ERROR))
     }
 }

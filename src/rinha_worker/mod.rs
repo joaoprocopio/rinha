@@ -19,7 +19,7 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 
 pub struct RinhaWorker {
-    receiver: Mutex<mpsc::Receiver<PaymentRequest>>,
+    receiver: Arc<Mutex<mpsc::Receiver<PaymentRequest>>>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     connector: Arc<Connector>,
 }
@@ -31,25 +31,25 @@ impl RinhaWorker {
         connector: Connector,
     ) -> Self {
         Self {
-            receiver: Mutex::new(receiver),
             load_balancer: load_balancer,
+            receiver: Arc::new(Mutex::new(receiver)),
             connector: Arc::new(connector),
         }
     }
 
-    async fn process_payment(&self, payment_request: PaymentRequest) {
+    async fn try_process_payment(&self, payment_request: PaymentRequest) {
         let load_balancer = self.load_balancer.clone();
 
         let Some(backend) = load_balancer.select(b"", 8) else {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "no backend found"
             );
             return;
         };
         let Some(target) = backend.ext.get::<Target>().cloned() else {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "failed to get Target backend ext"
             );
             return;
@@ -60,7 +60,7 @@ impl RinhaWorker {
 
         let Ok((mut http, _)) = connector.get_http_session(&peer).await else {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "failed to get http session"
             );
             return;
@@ -68,7 +68,7 @@ impl RinhaWorker {
 
         let Ok(payment_ser) = serde_json::ser::to_vec(&payment_request) else {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "failed to serialize payment struct"
             );
             return;
@@ -76,7 +76,7 @@ impl RinhaWorker {
 
         let Ok(mut request_header) = RequestHeader::build(Method::POST, b"/payments", None) else {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "failed to build request header"
             );
             return;
@@ -89,7 +89,7 @@ impl RinhaWorker {
             .is_err()
         {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "failed to write request headers"
             );
             return;
@@ -103,7 +103,7 @@ impl RinhaWorker {
             .is_err()
         {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "failed to send request"
             );
             return;
@@ -111,7 +111,7 @@ impl RinhaWorker {
 
         if http.read_response_header().await.is_err() {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "failed to read header"
             );
             return;
@@ -119,7 +119,7 @@ impl RinhaWorker {
 
         let Some(response_header) = http.response_header() else {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "fail while reading response header"
             );
             return;
@@ -127,7 +127,7 @@ impl RinhaWorker {
 
         if !response_header.status.is_success() {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "non-200 status code"
             );
             return;
@@ -160,7 +160,7 @@ impl RinhaWorker {
             .await
         else {
             rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::process_payment),
+                rinha_tracing::type_name_of_val!(&Self::try_process_payment),
                 "error while inserting to storage"
             );
             return;
@@ -171,15 +171,16 @@ impl RinhaWorker {
 #[async_trait]
 impl BackgroundService for RinhaWorker {
     async fn start(&self, mut shutdown: ShutdownWatch) {
-        let mut receiver = self.receiver.lock().await;
+        let mutex = self.receiver.clone();
+        let mut receiver = mutex.lock().await;
 
         loop {
             tokio::select! {
                 _ = shutdown.changed() => {
                     break;
                 }
-                Some(payment_request) = receiver.recv() => {
-                    self.process_payment(payment_request).await
+                Some(payment) = receiver.recv() => {
+                    self.try_process_payment(payment).await
                 }
             }
         }
