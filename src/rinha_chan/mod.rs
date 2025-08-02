@@ -19,6 +19,6 @@ pub fn get_receiver() -> Arc<Mutex<PaymentReceiver>> {
     CHANNEL.1.clone()
 }
 
-pub fn bootstrap() {
+pub fn boostrap() {
     LazyLock::force(&CHANNEL);
 }
