@@ -26,7 +26,7 @@ fn main() {
 
     server.bootstrap();
 
-    let (sender, receiver) = mpsc::channel::<Payment>(size_of::<Payment>() * 4096);
+    let (sender, receiver) = mpsc::unbounded_channel::<Payment>();
 
     let rinha_load_balancer = rinha_load_balancer_service();
     let rinha_http = rinha_http_service(sender);

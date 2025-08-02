@@ -22,11 +22,11 @@ const EMPTY_BODY: Vec<u8> = vec![];
 const EMPTY_BODY_LEN: usize = 0;
 
 pub struct RinhaHttpApp {
-    sender: Arc<mpsc::Sender<Payment>>,
+    sender: Arc<mpsc::UnboundedSender<Payment>>,
 }
 
 impl RinhaHttpApp {
-    fn new(sender: mpsc::Sender<Payment>) -> Self {
+    fn new(sender: mpsc::UnboundedSender<Payment>) -> Self {
         Self {
             sender: Arc::new(sender),
         }
@@ -58,13 +58,9 @@ impl Handlers for RinhaHttpApp {
             return empty_response_with_status_code(StatusCode::BAD_REQUEST);
         };
 
-        if sender.send(payment_request).await.is_err() {
-            rinha_tracing::debug!(
-                rinha_tracing::type_name_of_val!(&Self::payments),
-                "channel send failed"
-            );
-            return empty_response_with_status_code(StatusCode::SERVICE_UNAVAILABLE);
-        }
+        let handle = pingora_runtime::current_handle();
+
+        handle.spawn(async move { sender.send(payment_request) });
 
         empty_response_with_status_code(StatusCode::OK)
     }
@@ -173,7 +169,9 @@ where
         .unwrap()
 }
 
-pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<HttpServer<RinhaHttpApp>> {
+pub fn rinha_http_service(
+    sender: mpsc::UnboundedSender<Payment>,
+) -> Service<HttpServer<RinhaHttpApp>> {
     let mut server = HttpServer::new_app(RinhaHttpApp::new(sender));
     server.add_module(ResponseCompressionBuilder::enable(7));
 

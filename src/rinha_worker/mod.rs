@@ -19,14 +19,14 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 
 pub struct RinhaWorker {
-    receiver: Mutex<mpsc::Receiver<Payment>>,
+    receiver: Mutex<mpsc::UnboundedReceiver<Payment>>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     connector: Arc<Connector>,
 }
 
 impl RinhaWorker {
     fn new(
-        receiver: mpsc::Receiver<Payment>,
+        receiver: mpsc::UnboundedReceiver<Payment>,
         load_balancer: Arc<LoadBalancer<RoundRobin>>,
         connector: Connector,
     ) -> Self {
@@ -135,7 +135,9 @@ async fn try_process_payment(
         return;
     }
 
-    pingora_runtime::current_handle().spawn(async move {
+    let handle = pingora_runtime::current_handle();
+
+    handle.spawn(async move {
         let storage = rinha_storage::get_storage();
         let mut storage = storage.write().await;
         let Some(storage) = storage.get_mut(&target) else {
@@ -177,7 +179,7 @@ impl BackgroundService for RinhaWorker {
 }
 
 pub fn rinha_worker_service(
-    receiver: mpsc::Receiver<Payment>,
+    receiver: mpsc::UnboundedReceiver<Payment>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     server_configuration: Arc<ServerConf>,
 ) -> GenBackgroundService<RinhaWorker> {
