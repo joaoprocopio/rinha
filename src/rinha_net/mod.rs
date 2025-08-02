@@ -1,23 +1,24 @@
-use crate::rinha_core::Result;
-use http_body_util::{BodyExt, Empty, Full};
+use crate::{rinha_core::Result, rinha_http};
 use hyper::{
-    Method, Request, Response, StatusCode,
+    Method, Request, Response,
     body::{Bytes, Incoming},
     server::conn::http1,
     service::service_fn,
 };
 use hyper_util::rt::TokioIo;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::net::SocketAddr;
+use std::{convert::Infallible, net::SocketAddr};
 use tokio::net::{TcpListener, ToSocketAddrs, lookup_host};
 
-pub type BoxBody = http_body_util::combinators::BoxBody<hyper::body::Bytes, hyper::Error>;
+pub type BoxBody<D = hyper::body::Bytes, E = hyper::Error> =
+    http_body_util::combinators::BoxBody<D, E>;
 
-// fn resolve_socket_addr(addr: &str) -> SocketAddr {
-//     let socket_addrs: Vec<std::net::SocketAddr> = addr.to_socket_addrs().unwrap().collect();
-
-//     SocketAddr::Inet(socket_addrs.into_iter().next().unwrap())
-// }
+pub async fn router(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>> {
+    match (req.method(), req.uri().path()) {
+        (&Method::GET, "/ping") => rinha_http::ping(),
+        _ => rinha_http::not_found_error(),
+    }
+}
 
 pub async fn resolve_socket_addr<T: ToSocketAddrs>(addr: T) -> Result<SocketAddr> {
     let mut addrs = lookup_host(addr).await?;
@@ -41,26 +42,6 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
     socket.listen(backlog)?;
 
     Ok(socket)
-}
-
-pub async fn router(req: Request<Incoming>) -> Result<Response<BoxBody>> {
-    match (req.method(), req.uri().path()) {
-        (&Method::GET, "/") => {
-            let body = Full::new(Bytes::from("hello, world!"))
-                .map_err(|never| match never {})
-                .boxed();
-
-            Ok(Response::new(body))
-        }
-        _ => {
-            let body = Empty::new().map_err(|never| match never {}).boxed();
-
-            Ok(Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(body)
-                .unwrap())
-        }
-    }
 }
 
 pub async fn accept_loop(tcp_listener: TcpListener) -> Result<()> {

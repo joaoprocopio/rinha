@@ -4,6 +4,7 @@ use tokio::net::TcpListener;
 mod rinha_conf;
 mod rinha_core;
 mod rinha_domain;
+mod rinha_http;
 mod rinha_net;
 mod rinha_storage;
 

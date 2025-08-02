@@ -4,6 +4,11 @@ services:
     build:
       context: "."
       dockerfile: "./dockerfile.dev"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:9999 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - "payment-processor"
     environment:
