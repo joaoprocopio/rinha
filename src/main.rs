@@ -1,21 +1,41 @@
-use std::{convert::Infallible, error::Error, net::SocketAddr};
-
-use http_body_util::Full;
-use hyper::{Request, Response, body::Bytes, server::conn::http1, service::service_fn};
+use http_body_util::{BodyExt, Empty, Full};
+use hyper::{
+    Method, Request, Response, StatusCode,
+    body::{Bytes, Incoming},
+    server::conn::http1,
+    service::service_fn,
+};
 use hyper_util::rt::TokioIo;
+use std::error::Error;
 use tokio::net::TcpListener;
 
-type BoxedError = Box<dyn Error + Send + Sync>;
-type Result<T, E = BoxedError> = std::result::Result<T, E>;
+type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
+type BoxError = Box<dyn Error + Send + Sync>;
+type Result<T, E = BoxError> = std::result::Result<T, E>;
 
-async fn hello(_: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    Ok(Response::new(Full::new(Bytes::from("Hello, world!"))))
+async fn muxer(req: Request<Incoming>) -> Result<Response<BoxBody>> {
+    match (req.method(), req.uri().path()) {
+        (&Method::GET, "/") => {
+            let body = Full::new(Bytes::from("hello, world!"))
+                .map_err(|never| match never {})
+                .boxed();
+
+            Ok(Response::new(body))
+        }
+        _ => {
+            let body = Empty::new().map_err(|never| match never {}).boxed();
+
+            Ok(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(body)
+                .unwrap())
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let addr = SocketAddr::from(([0, 0, 0, 0], 9999));
-    let listener = TcpListener::bind(addr).await?;
+    let listener = TcpListener::bind("0.0.0.0:9999").await?;
 
     loop {
         let (tcp, _) = listener.accept().await?;
@@ -23,7 +43,7 @@ async fn main() -> Result<()> {
 
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new()
-                .serve_connection(io, service_fn(hello))
+                .serve_connection(io, service_fn(muxer))
                 .await
             {
                 println!("error serving connection {:?}", err)
