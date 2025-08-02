@@ -1,10 +1,10 @@
 use crate::{
     rinha_conf::RINHA_ADDR,
-    rinha_domain::{DateTime, Payment, PaymentRequest, Target, TargetCounter},
+    rinha_domain::{Payment, Target, TargetCounter},
     rinha_storage, rinha_tracing,
 };
 use async_trait::async_trait;
-use fjall::Slice;
+use chrono::{DateTime, Utc};
 use http::{Method, Response, StatusCode, header};
 use pingora::{
     apps::http_app::{HttpServer, ServeHttp},
@@ -22,11 +22,11 @@ const EMPTY_BODY: Vec<u8> = vec![];
 const EMPTY_BODY_LEN: usize = 0;
 
 pub struct RinhaHttpApp {
-    sender: Arc<mpsc::Sender<PaymentRequest>>,
+    sender: Arc<mpsc::Sender<Payment>>,
 }
 
 impl RinhaHttpApp {
-    fn new(sender: mpsc::Sender<PaymentRequest>) -> Self {
+    fn new(sender: mpsc::Sender<Payment>) -> Self {
         Self {
             sender: Arc::new(sender),
         }
@@ -50,7 +50,7 @@ impl Handlers for RinhaHttpApp {
             return empty_response_with_status_code(StatusCode::NOT_ACCEPTABLE);
         };
 
-        let Ok(payment_request) = serde_json::de::from_slice::<PaymentRequest>(&body) else {
+        let Ok(payment_request) = serde_json::de::from_slice::<Payment>(&body) else {
             rinha_tracing::debug!(
                 rinha_tracing::type_name_of_val!(&Self::payments),
                 "fail while deserializing request body"
@@ -70,8 +70,8 @@ impl Handlers for RinhaHttpApp {
     }
 
     async fn payments_summary(&self, http_session: &mut ServerSession) -> Response<Vec<u8>> {
-        let mut from: Option<DateTime> = None;
-        let mut to: Option<DateTime> = None;
+        let mut from: Option<DateTime<Utc>> = None;
+        let mut to: Option<DateTime<Utc>> = None;
 
         if let Some(query) = http_session.req_header().uri.query() {
             let query = form_urlencoded::parse(query.as_bytes());
@@ -79,70 +79,47 @@ impl Handlers for RinhaHttpApp {
             for (key, value) in query {
                 match &*key {
                     "from" => {
-                        from = Some(DateTime::wrap(
-                            chrono::DateTime::parse_from_rfc3339(&value)
-                                .map(|dt| dt.with_timezone(&chrono::Utc))
-                                .unwrap(),
-                        ))
+                        from = chrono::DateTime::parse_from_rfc3339(&value)
+                            .map(|dt| dt.with_timezone(&chrono::Utc))
+                            .ok()
                     }
                     "to" => {
-                        to = Some(DateTime::wrap(
-                            chrono::DateTime::parse_from_rfc3339(&value)
-                                .map(|dt| dt.with_timezone(&chrono::Utc))
-                                .unwrap(),
-                        ))
+                        to = chrono::DateTime::parse_from_rfc3339(&value)
+                            .map(|dt| dt.with_timezone(&chrono::Utc))
+                            .ok()
                     }
                     _ => (),
                 }
             }
         }
 
-        let target_counter = pingora_runtime::current_handle()
-            .spawn_blocking(move || {
-                let storage = rinha_storage::get_handle();
-                let mut target_counter = TargetCounter::default();
+        let mut target_counter = TargetCounter::default();
+        let storage = rinha_storage::get_storage();
+        let storage = storage.read().await;
+        let default_storage = storage.get(&Target::Default).unwrap();
+        let fallback_storage = storage.get(&Target::Fallback).unwrap();
 
-                if let (Some(from), Some(to)) = (from, to) {
-                    let from: Slice = (&from).try_into().unwrap();
-                    let to: Slice = (&to).try_into().unwrap();
+        if let (Some(from), Some(to)) = (from, to) {
+            for (_, amount) in default_storage.range(&from..=&to) {
+                target_counter.default.requests += 1;
+                target_counter.default.amount += amount;
+            }
 
-                    for key_value in storage.range(from..=to) {
-                        let (_, value) = key_value.unwrap();
-                        let payment: Payment = (&value).try_into().unwrap();
+            for (_, amount) in fallback_storage.range(&from..=&to) {
+                target_counter.fallback.requests += 1;
+                target_counter.fallback.amount += amount;
+            }
+        } else {
+            for amount in default_storage.values() {
+                target_counter.default.requests += 1;
+                target_counter.default.amount += amount;
+            }
 
-                        match payment.target {
-                            Target::Default => {
-                                target_counter.default.requests += 1;
-                                target_counter.default.amount += payment.amount;
-                            }
-                            Target::Fallback => {
-                                target_counter.fallback.requests += 1;
-                                target_counter.fallback.amount += payment.amount;
-                            }
-                        }
-                    }
-                } else {
-                    for value in storage.values() {
-                        let value = value.unwrap();
-                        let payment: Payment = (&value).try_into().unwrap();
-
-                        match payment.target {
-                            Target::Default => {
-                                target_counter.default.requests += 1;
-                                target_counter.default.amount += payment.amount;
-                            }
-                            Target::Fallback => {
-                                target_counter.fallback.requests += 1;
-                                target_counter.fallback.amount += payment.amount;
-                            }
-                        }
-                    }
-                }
-
-                target_counter
-            })
-            .await
-            .unwrap();
+            for amount in fallback_storage.values() {
+                target_counter.fallback.requests += 1;
+                target_counter.fallback.amount += amount;
+            }
+        }
 
         let Ok(target_counter) = serde_json::ser::to_vec(&target_counter) else {
             rinha_tracing::debug!(
@@ -196,9 +173,7 @@ where
         .unwrap()
 }
 
-pub fn rinha_http_service(
-    sender: mpsc::Sender<PaymentRequest>,
-) -> Service<HttpServer<RinhaHttpApp>> {
+pub fn rinha_http_service(sender: mpsc::Sender<Payment>) -> Service<HttpServer<RinhaHttpApp>> {
     let mut server = HttpServer::new_app(RinhaHttpApp::new(sender));
     server.add_module(ResponseCompressionBuilder::enable(7));
 

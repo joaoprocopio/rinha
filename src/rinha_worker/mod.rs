@@ -1,6 +1,6 @@
 use crate::{
     rinha_conf::RINHA_HOST,
-    rinha_domain::{Payment, PaymentRequest, Target},
+    rinha_domain::{Payment, Target},
     rinha_http::JSON_CONTENT_TYPE,
     rinha_storage, rinha_tracing,
 };
@@ -19,14 +19,14 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 
 pub struct RinhaWorker {
-    receiver: Mutex<mpsc::Receiver<PaymentRequest>>,
+    receiver: Mutex<mpsc::Receiver<Payment>>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     connector: Arc<Connector>,
 }
 
 impl RinhaWorker {
     fn new(
-        receiver: mpsc::Receiver<PaymentRequest>,
+        receiver: mpsc::Receiver<Payment>,
         load_balancer: Arc<LoadBalancer<RoundRobin>>,
         connector: Connector,
     ) -> Self {
@@ -39,7 +39,7 @@ impl RinhaWorker {
 }
 
 async fn try_process_payment(
-    payment_request: PaymentRequest,
+    payment: Payment,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     connector: Arc<Connector>,
 ) {
@@ -68,7 +68,7 @@ async fn try_process_payment(
         return;
     };
 
-    let Ok(payment_ser) = serde_json::ser::to_vec(&payment_request) else {
+    let Ok(payment_ser) = serde_json::ser::to_vec(&payment) else {
         rinha_tracing::debug!(
             rinha_tracing::type_name_of_val!(&try_process_payment),
             "failed to serialize payment struct"
@@ -135,38 +135,18 @@ async fn try_process_payment(
         return;
     }
 
-    let Ok(Some(_)) = pingora_runtime::current_handle()
-        .spawn_blocking(move || -> Option<()> {
-            let storage = rinha_storage::get_handle();
-
-            // Create payment record with target information for database storage
-            let payment = Payment {
-                correlation_id: payment_request.correlation_id,
-                amount: payment_request.amount,
-                requested_at: payment_request.requested_at,
-                target: target,
-            };
-
-            let (key, value): (fjall::Slice, fjall::Slice) =
-                match ((&payment.requested_at).try_into(), (&payment).try_into()) {
-                    (Ok(key), Ok(value)) => (key, value),
-                    _ => return None,
-                };
-
-            if storage.insert(key, value).is_err() {
-                return None;
-            };
-
-            Some(())
-        })
-        .await
-    else {
-        rinha_tracing::debug!(
-            rinha_tracing::type_name_of_val!(&try_process_payment),
-            "error while inserting to storage"
-        );
-        return;
-    };
+    pingora_runtime::current_handle().spawn(async move {
+        let storage = rinha_storage::get_storage();
+        let mut storage = storage.write().await;
+        let Some(storage) = storage.get_mut(&target) else {
+            rinha_tracing::debug!(
+                rinha_tracing::type_name_of_val!(&try_process_payment),
+                "failed while trying to get storage reference"
+            );
+            return;
+        };
+        storage.insert(payment.requested_at, payment.amount);
+    });
 }
 
 #[async_trait]
@@ -197,7 +177,7 @@ impl BackgroundService for RinhaWorker {
 }
 
 pub fn rinha_worker_service(
-    receiver: mpsc::Receiver<PaymentRequest>,
+    receiver: mpsc::Receiver<Payment>,
     load_balancer: Arc<LoadBalancer<RoundRobin>>,
     server_configuration: Arc<ServerConf>,
 ) -> GenBackgroundService<RinhaWorker> {

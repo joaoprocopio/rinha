@@ -10,7 +10,7 @@ mod rinha_tracing;
 mod rinha_worker;
 
 use crate::{
-    rinha_domain::PaymentRequest, rinha_http::rinha_http_service,
+    rinha_domain::Payment, rinha_http::rinha_http_service,
     rinha_load_balancer::rinha_load_balancer_service, rinha_worker::rinha_worker_service,
 };
 use pingora::{prelude::*, server::configuration::ServerConf};
@@ -26,7 +26,7 @@ fn main() {
 
     server.bootstrap();
 
-    let (sender, receiver) = mpsc::channel::<PaymentRequest>(size_of::<PaymentRequest>() * 4096);
+    let (sender, receiver) = mpsc::channel::<Payment>(size_of::<Payment>() * 4096);
 
     let rinha_load_balancer = rinha_load_balancer_service();
     let rinha_http = rinha_http_service(sender);
