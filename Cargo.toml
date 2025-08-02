@@ -3,6 +3,9 @@ name = "rinha"
 version = "0.0.1"
 edition = "2024"
 
+[dependencies]
+tokio = { version = "1.47.1", features = ["full"] }
+
 [profile.release]
 opt-level = 3
 debug = false
@@ -26,4 +29,3 @@ panic = "unwind"
 incremental = true
 codegen-units = 256
 rpath = false
-
