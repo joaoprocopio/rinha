@@ -1,0 +1,28 @@
+services:
+  rinha:
+    platform: "linux/amd64"
+    build:
+      context: "."
+      dockerfile: "./dockerfile.dev"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:9999/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - "payment-processor"
+    environment:
+      RINHA_HOST: "0.0.0.0"
+      RINHA_PORT: "9999"
+      RINHA_DEFAULT_BACKEND_HOST: "host.docker.internal"
+      RINHA_DEFAULT_BACKEND_PORT: "8001"
+      RINHA_FALLBACK_BACKEND_HOST: "host.docker.internal"
+      RINHA_FALLBACK_BACKEND_PORT: "8002"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9999:9999"
+
+networks:
+  payment-processor:
+    external: true
