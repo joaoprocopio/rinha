@@ -90,44 +90,18 @@ async fn try_check(upstream: &Upstream) -> Result<()> {
     }
 }
 
-fn set_health(upstream: Arc<Upstream>, health_map: &mut HealthMap, value: bool) -> Option<bool> {
-    health_map.insert(upstream.hash_addr(), value)
-}
-
 async fn check() -> Result<()> {
     let upstreams = get_upstreams().ok_or_else(|| "Failed to get upstreams")?;
     let health_map = get_health_map();
     let mut health_map = health_map.write().await;
 
-    match tokio::join!(
+    let results = tokio::join!(
         try_check(upstreams.0.as_ref()),
         try_check(upstreams.1.as_ref())
-    ) {
-        (Ok(_), Ok(_)) => {
-            set_health(upstreams.0, &mut health_map, true)
-                .ok_or_else(|| "Failed while setting health")?;
-            set_health(upstreams.1, &mut health_map, true)
-                .ok_or_else(|| "Failed while setting health")?;
-        }
-        (Ok(_), Err(_)) => {
-            set_health(upstreams.0, &mut health_map, true)
-                .ok_or_else(|| "Failed while setting health")?;
-            set_health(upstreams.1, &mut health_map, false)
-                .ok_or_else(|| "Failed while setting health")?;
-        }
-        (Err(_), Ok(_)) => {
-            set_health(upstreams.0, &mut health_map, false)
-                .ok_or_else(|| "Failed while setting health")?;
-            set_health(upstreams.1, &mut health_map, true)
-                .ok_or_else(|| "Failed while setting health")?;
-        }
-        (Err(_), Err(_)) => {
-            set_health(upstreams.0, &mut health_map, false)
-                .ok_or_else(|| "Failed while setting health")?;
-            set_health(upstreams.1, &mut health_map, false)
-                .ok_or_else(|| "Failed while setting health")?;
-        }
-    };
+    );
+
+    health_map.insert(upstreams.0.hash_addr(), results.0.is_ok());
+    health_map.insert(upstreams.1.hash_addr(), results.1.is_ok());
 
     Ok(())
 }
@@ -153,11 +127,11 @@ pub async fn select() -> Option<Arc<Upstream>> {
     None
 }
 
-pub fn get_health_map() -> Arc<RwLock<HealthMap>> {
+fn get_health_map() -> Arc<RwLock<HealthMap>> {
     HEALTH_MAP.clone()
 }
 
-pub fn get_upstreams() -> Option<(Arc<Upstream>, Arc<Upstream>)> {
+fn get_upstreams() -> Option<(Arc<Upstream>, Arc<Upstream>)> {
     Some((
         DEFAULT_UPSTREAM.get()?.clone(),
         FALLBACK_UPSTREAM.get()?.clone(),
