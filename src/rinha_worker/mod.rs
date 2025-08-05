@@ -1,5 +1,3 @@
-use std::{os::unix::process, str::FromStr};
-
 use crate::{
     rinha_balancer::{self, Processor},
     rinha_chan, rinha_conf,
@@ -11,6 +9,7 @@ use crate::{
 use http_body_util::{BodyExt, Full};
 use hyper::{Method, Request, Uri, body::Bytes, client::conn::http1, header};
 use hyper_util::rt::TokioIo;
+use std::str::FromStr;
 use tokio::net::TcpStream;
 
 async fn process_payment(payment: Payment) -> Result<()> {
@@ -25,10 +24,7 @@ async fn process_payment(payment: Payment) -> Result<()> {
         }
     });
 
-    let balancer = rinha_balancer::get_balancer()?;
-    // TODO: fazer o retry, aqui tá aceitando os drops
-    let upstream = balancer
-        .select()
+    let upstream = rinha_balancer::select()
         .await
         .ok_or_else(|| "Failed to get healhy upstream")?;
     let processor = upstream
@@ -40,7 +36,7 @@ async fn process_payment(payment: Payment) -> Result<()> {
     // TODO: aqui eu vou precisar do host que vai virar a uri
     // TODO: vou precisar saber se é o target ou o fallback
     let uri = Uri::from_str(uri.as_str())?;
-    let authority = uri.authority().ok_or("Unable to get authority")?;
+    let authority = uri.authority().ok_or_else(|| "Unable to get authority")?;
 
     let payment_ser = serde_json::to_string(&payment)?;
 
@@ -59,7 +55,7 @@ async fn process_payment(payment: Payment) -> Result<()> {
         let mut storage = storage.write().await;
         let storage = storage
             .get_mut(&processor)
-            .ok_or("Unable to get mutable reference to storage")?;
+            .ok_or_else(|| "Unable to get mutable reference to storage")?;
         storage.insert(payment.requested_at, payment.amount);
     }
 

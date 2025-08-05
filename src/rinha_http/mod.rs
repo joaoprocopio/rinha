@@ -33,7 +33,7 @@ pub async fn payments_summary(
     let mut from = Utc
         .timestamp_opt(0, 0)
         .single()
-        .ok_or("Unable to parse from")?;
+        .ok_or_else(|| "Unable to parse from")?;
     let mut to = Utc::now();
 
     if let Some(query) = req.uri().query() {
@@ -55,8 +55,12 @@ pub async fn payments_summary(
     let storage = rinha_storage::get_storage();
     let storage = storage.read().await;
 
-    let default_storage = storage.get(&Processor::Default).ok_or("Failed to get")?;
-    let fallback_storage = storage.get(&Processor::Fallback).ok_or("Failed to get")?;
+    let default_storage = storage
+        .get(&Processor::Default)
+        .ok_or_else(|| "Failed to get")?;
+    let fallback_storage = storage
+        .get(&Processor::Fallback)
+        .ok_or_else(|| "Failed to get")?;
 
     for (_, amount) in default_storage.range(from..=to) {
         target_counter.default.requests += 1;

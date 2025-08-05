@@ -15,7 +15,7 @@ pub const JSON_CONTENT_TYPE: &'static str = "application/json";
 
 pub async fn resolve_socket_addr<T: ToSocketAddrs>(addr: T) -> Result<SocketAddr> {
     let mut addrs = lookup_host(addr).await?;
-    let addr = addrs.next().ok_or("Couldn't match an address")?;
+    let addr = addrs.next().ok_or_else(|| "Couldn't match an address")?;
 
     Ok(addr)
 }
