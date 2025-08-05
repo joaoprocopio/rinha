@@ -1,6 +1,6 @@
 use crate::{
     rinha_balancer::{self, Processor},
-    rinha_chan, rinha_conf,
+    rinha_chan,
     rinha_core::Result,
     rinha_domain::Payment,
     rinha_net::JSON_CONTENT_TYPE,
@@ -13,7 +13,17 @@ use std::str::FromStr;
 use tokio::net::TcpStream;
 
 async fn process_payment(payment: Payment) -> Result<()> {
-    let stream = TcpStream::connect(rinha_conf::RINHA_DEFAULT_UPSTREAM_ADDR.as_str()).await?;
+    // TODO: aqui eu vou precisar do host que vai virar a uri
+    // TODO: vou precisar saber se é o target ou o fallback
+    let upstream = rinha_balancer::select()
+        .await
+        .ok_or_else(|| "Failed to get healhy upstream")?;
+    let processor = upstream
+        .ext
+        .get::<Processor>()
+        .ok_or_else(|| "No Processor enum field is found")?;
+
+    let stream = TcpStream::connect(upstream.addr).await?;
 
     let io = TokioIo::new(stream);
     let (mut sender, conn) = http1::handshake(io).await?;
@@ -24,17 +34,7 @@ async fn process_payment(payment: Payment) -> Result<()> {
         }
     });
 
-    let upstream = rinha_balancer::select()
-        .await
-        .ok_or_else(|| "Failed to get healhy upstream")?;
-    let processor = upstream
-        .ext
-        .get::<Processor>()
-        .ok_or_else(|| "No Processor enum field is found")?;
-
     let uri = format!("http://{}/payments", upstream.addr);
-    // TODO: aqui eu vou precisar do host que vai virar a uri
-    // TODO: vou precisar saber se é o target ou o fallback
     let uri = Uri::from_str(uri.as_str())?;
     let authority = uri.authority().ok_or_else(|| "Unable to get authority")?;
 

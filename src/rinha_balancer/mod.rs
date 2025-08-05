@@ -1,11 +1,18 @@
 use crate::{rinha_conf, rinha_core::Result, rinha_net::resolve_socket_addr};
 use derivative::Derivative;
-use http::Extensions;
+use http::{Extensions, Method, Request, Uri, header};
+use http_body_util::Empty;
+use hyper::body::Bytes;
+use hyper::client::conn::http1;
+use hyper_util::rt::TokioIo;
 use std::collections::{BTreeSet, HashMap};
+use std::error::Error;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
+use tokio::net::TcpStream;
 use tokio::sync::{OnceCell, RwLock};
 use tokio::time::interval;
 
@@ -51,7 +58,43 @@ impl Upstream {
     }
 }
 
+async fn try_check(upstream: &Upstream) -> Result<()> {
+    let stream = TcpStream::connect(upstream.addr).await?;
+
+    let io = TokioIo::new(stream);
+    let (mut sender, conn) = http1::handshake(io).await?;
+
+    tokio::spawn(async move {
+        if let Err(err) = conn.await {
+            tracing::error!(?err, "Connection error while checking");
+        }
+    });
+
+    let uri = format!("http://{}/payments/service-health", upstream.addr);
+    let uri = Uri::from_str(uri.as_str())?;
+    let authority = uri.authority().ok_or_else(|| "Unable to get authority")?;
+
+    let req = Request::builder()
+        .method(Method::GET)
+        .header(header::HOST, authority.as_str())
+        .uri(uri)
+        .body(Empty::<Bytes>::new())?;
+
+    let res = sender.send_request(req).await?;
+    let status = res.status();
+
+    if status.is_success() {
+        Ok(())
+    } else {
+        Err("Health check failed".into())
+    }
+}
+
 async fn check() -> Result<()> {
+    let upstreams = get_upstreams().ok_or_else(|| "Failed to get upstreams")?;
+    let upstreams = upstreams.iter().map(|upstream| try_check(upstream));
+    let upstreams = futures::future::join_all(upstreams).await;
+
     Ok(())
 }
 
@@ -107,11 +150,11 @@ pub async fn bootstrap() -> Result<()> {
 }
 
 pub async fn task() -> Result<()> {
-    let mut inter = interval(Duration::from_secs(5));
+    let mut ticker = interval(Duration::from_secs(5));
 
     loop {
         tokio::select! {
-            _ = inter.tick() => {
+            _ = ticker.tick() => {
                 if let Err(err) = check().await {
                     tracing::error!(?err)
                 }
