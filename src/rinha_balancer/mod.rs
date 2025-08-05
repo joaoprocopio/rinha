@@ -93,13 +93,13 @@ async fn check() -> Result<()> {
     let health_map = get_health_map();
     let mut health_map = health_map.write().await;
 
-    let results = tokio::join!(
+    let results = tokio::try_join!(
         try_check(upstreams.0.as_ref()),
         try_check(upstreams.1.as_ref())
-    );
+    )?;
 
-    health_map.insert(upstreams.0.hash_addr(), results.0.is_ok());
-    health_map.insert(upstreams.1.hash_addr(), results.1.is_ok());
+    health_map.insert(upstreams.0.hash_addr(), !results.0.failing);
+    health_map.insert(upstreams.1.hash_addr(), !results.1.failing);
 
     Ok(())
 }
