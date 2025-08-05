@@ -12,6 +12,14 @@ pub struct Payment {
     pub requested_at: DateTime<Utc>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Health {
+    #[serde(rename = "failing")]
+    pub failing: bool,
+    #[serde(rename = "minResponseTime")]
+    pub min_response_time: i32,
+}
+
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct TargetCounter {
     #[serde(rename = "default")]

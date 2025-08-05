@@ -1,8 +1,9 @@
+use crate::rinha_domain::Health;
 use crate::{rinha_conf, rinha_core::Result, rinha_net::resolve_socket_addr};
 use derivative::Derivative;
 use http::{Extensions, Method, Request, Uri, header};
-use http_body_util::Empty;
-use hyper::body::Bytes;
+use http_body_util::{BodyExt, Empty};
+use hyper::body::{Buf, Bytes};
 use hyper::client::conn::http1;
 use hyper_util::rt::TokioIo;
 use std::collections::HashMap;
@@ -58,7 +59,7 @@ impl Upstream {
     }
 }
 
-async fn try_check(upstream: &Upstream) -> Result<()> {
+async fn try_check(upstream: &Upstream) -> Result<Health> {
     let stream = TcpStream::connect(upstream.addr).await?;
 
     let io = TokioIo::new(stream);
@@ -81,13 +82,10 @@ async fn try_check(upstream: &Upstream) -> Result<()> {
         .body(Empty::<Bytes>::new())?;
 
     let res = sender.send_request(req).await?;
-    let status = res.status();
+    let body = res.collect().await?.aggregate();
+    let health: Health = serde_json::from_reader(body.reader())?;
 
-    if status.is_success() {
-        Ok(())
-    } else {
-        Err("Health check failed".into())
-    }
+    Ok(health)
 }
 
 async fn check() -> Result<()> {
@@ -106,7 +104,7 @@ async fn check() -> Result<()> {
     Ok(())
 }
 
-pub fn is_healthy(upstream: &Upstream, health_map: &HealthMap) -> bool {
+fn is_healthy(upstream: &Upstream, health_map: &HealthMap) -> bool {
     match health_map.get(&upstream.hash_addr()) {
         Some(is_healthy) => is_healthy.clone(),
         _ => false,
