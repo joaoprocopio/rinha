@@ -19,7 +19,7 @@ pub async fn payments(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, 
     let body = req.collect().await?.aggregate();
     let payment: Payment = serde_json::from_reader(body.reader())?;
     let sender = rinha_chan::get_sender();
-    sender.send(payment)?;
+    let _ = sender.send(payment)?;
 
     Response::builder()
         .status(StatusCode::OK)

@@ -58,11 +58,7 @@ async fn process_payment(payment: Payment) -> Result<()> {
     }
 
     if status.is_server_error() {
-        let health_map = rinha_balancer::get_health_map();
-        let mut health_map = health_map.write().await;
-        health_map.insert(upstream.hash_addr(), false);
-
-        // TODO: força um retry pra não ter drop de processamento
+        return Err("Request failed".into());
     }
 
     Ok(())
