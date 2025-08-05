@@ -67,7 +67,7 @@ async fn try_check(upstream: &Upstream) -> Result<Health> {
 
     tokio::spawn(async move {
         if let Err(err) = conn.await {
-            tracing::error!(?err, "Connection error while checking");
+            tracing::error!(?err);
         }
     });
 

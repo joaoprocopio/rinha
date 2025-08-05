@@ -28,7 +28,7 @@ async fn process_payment(payment: Payment) -> Result<()> {
 
     tokio::spawn(async move {
         if let Err(err) = conn.await {
-            tracing::error!(?err, "Connection error");
+            tracing::error!(?err);
         }
     });
 
@@ -77,7 +77,7 @@ pub async fn task() {
             Some(payment) = receiver.recv() => {
                 tokio::spawn(async move {
                     if let Err(err) = process_payment(payment).await {
-                        tracing::error!(?err, "error while processing payment");
+                        tracing::error!(?err);
                     }
                 })
             }
