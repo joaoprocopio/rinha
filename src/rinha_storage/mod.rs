@@ -1,4 +1,4 @@
-use crate::rinha_balancer::Processor;
+use crate::rinha_balancer::UpstreamType;
 use chrono::{DateTime, Utc};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -6,14 +6,14 @@ use std::{
 };
 use tokio::sync::RwLock;
 
-type Storage = HashMap<Processor, BTreeMap<DateTime<Utc>, f64>>;
+type Storage = HashMap<UpstreamType, BTreeMap<DateTime<Utc>, f64>>;
 
 static STORAGE: LazyLock<Arc<RwLock<Storage>>> = LazyLock::new(|| {
-    let processors = [Processor::Default, Processor::Fallback];
-    let mut hash_map: Storage = HashMap::with_capacity(processors.len());
+    let upstreams = [UpstreamType::Default, UpstreamType::Fallback];
+    let mut hash_map: Storage = HashMap::with_capacity(upstreams.len());
 
-    for processor in processors {
-        hash_map.insert(processor, BTreeMap::new());
+    for upstream in upstreams {
+        hash_map.insert(upstream, BTreeMap::new());
     }
 
     Arc::new(RwLock::new(hash_map))

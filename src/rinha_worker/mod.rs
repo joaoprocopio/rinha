@@ -1,5 +1,5 @@
 use crate::{
-    rinha_balancer::{self, Processor},
+    rinha_balancer::{self, UpstreamType},
     rinha_chan,
     rinha_core::Result,
     rinha_domain::Payment,
@@ -17,11 +17,11 @@ async fn process_payment(payment: Payment) -> Result<()> {
     // TODO: vou precisar saber se é o target ou o fallback
     let upstream = rinha_balancer::select()
         .await
-        .ok_or_else(|| "Failed to get healhy upstream")?;
-    let processor = upstream
+        .ok_or_else(|| "Failed to get healthy upstream")?;
+    let upstream_type = upstream
         .ext
-        .get::<Processor>()
-        .ok_or_else(|| "No Processor enum field is found")?;
+        .get::<UpstreamType>()
+        .ok_or_else(|| "No enum field is found")?;
 
     let stream = TcpStream::connect(upstream.addr).await?;
 
@@ -54,7 +54,7 @@ async fn process_payment(payment: Payment) -> Result<()> {
         let storage = rinha_storage::get_storage();
         let mut storage = storage.write().await;
         let storage = storage
-            .get_mut(&processor)
+            .get_mut(&upstream_type)
             .ok_or_else(|| "Unable to get mutable reference to storage")?;
         storage.insert(payment.requested_at, payment.amount);
     }

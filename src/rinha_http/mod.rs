@@ -1,5 +1,5 @@
 use crate::{
-    rinha_balancer::Processor,
+    rinha_balancer::UpstreamType,
     rinha_chan,
     rinha_core::Result,
     rinha_domain::{Payment, TargetCounter},
@@ -56,10 +56,10 @@ pub async fn payments_summary(
     let storage = storage.read().await;
 
     let default_storage = storage
-        .get(&Processor::Default)
+        .get(&UpstreamType::Default)
         .ok_or_else(|| "Failed to get")?;
     let fallback_storage = storage
-        .get(&Processor::Fallback)
+        .get(&UpstreamType::Fallback)
         .ok_or_else(|| "Failed to get")?;
 
     for (_, amount) in default_storage.range(from..=to) {

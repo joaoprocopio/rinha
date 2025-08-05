@@ -5,8 +5,7 @@ use http_body_util::Empty;
 use hyper::body::Bytes;
 use hyper::client::conn::http1;
 use hyper_util::rt::TokioIo;
-use std::collections::{BTreeSet, HashMap};
-use std::error::Error;
+use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -16,15 +15,16 @@ use tokio::net::TcpStream;
 use tokio::sync::{OnceCell, RwLock};
 use tokio::time::interval;
 
-type Upstreams = BTreeSet<Upstream>;
 type HealthMap = HashMap<u64, bool>;
 
-static UPSTREAMS: OnceCell<Arc<Upstreams>> = OnceCell::const_new();
+static DEFAULT_UPSTREAM: OnceCell<Arc<Upstream>> = OnceCell::const_new();
+static FALLBACK_UPSTREAM: OnceCell<Arc<Upstream>> = OnceCell::const_new();
+
 static HEALTH_MAP: LazyLock<Arc<RwLock<HealthMap>>> =
     LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum Processor {
+pub enum UpstreamType {
     Default,
     Fallback,
 }
@@ -90,30 +90,64 @@ async fn try_check(upstream: &Upstream) -> Result<()> {
     }
 }
 
+fn set_health(upstream: Arc<Upstream>, health_map: &mut HealthMap, value: bool) -> Option<bool> {
+    health_map.insert(upstream.hash_addr(), value)
+}
+
 async fn check() -> Result<()> {
     let upstreams = get_upstreams().ok_or_else(|| "Failed to get upstreams")?;
-    let upstreams = upstreams.iter().map(|upstream| try_check(upstream));
-    let upstreams = futures::future::join_all(upstreams).await;
+    let health_map = get_health_map();
+    let mut health_map = health_map.write().await;
+
+    match tokio::join!(
+        try_check(upstreams.0.as_ref()),
+        try_check(upstreams.1.as_ref())
+    ) {
+        (Ok(_), Ok(_)) => {
+            set_health(upstreams.0, &mut health_map, true)
+                .ok_or_else(|| "Failed while setting health")?;
+            set_health(upstreams.1, &mut health_map, true)
+                .ok_or_else(|| "Failed while setting health")?;
+        }
+        (Ok(_), Err(_)) => {
+            set_health(upstreams.0, &mut health_map, true)
+                .ok_or_else(|| "Failed while setting health")?;
+            set_health(upstreams.1, &mut health_map, false)
+                .ok_or_else(|| "Failed while setting health")?;
+        }
+        (Err(_), Ok(_)) => {
+            set_health(upstreams.0, &mut health_map, false)
+                .ok_or_else(|| "Failed while setting health")?;
+            set_health(upstreams.1, &mut health_map, true)
+                .ok_or_else(|| "Failed while setting health")?;
+        }
+        (Err(_), Err(_)) => {
+            set_health(upstreams.0, &mut health_map, false)
+                .ok_or_else(|| "Failed while setting health")?;
+            set_health(upstreams.1, &mut health_map, false)
+                .ok_or_else(|| "Failed while setting health")?;
+        }
+    };
 
     Ok(())
 }
 
-pub async fn select() -> Option<Upstream> {
+pub fn is_healthy(upstream: &Upstream, health_map: &HealthMap) -> bool {
+    match health_map.get(&upstream.hash_addr()) {
+        Some(is_healthy) => is_healthy.clone(),
+        _ => false,
+    }
+}
+
+pub async fn select() -> Option<Arc<Upstream>> {
     let upstreams = get_upstreams()?;
     let health_map = get_health_map();
     let health_map = health_map.read().await;
 
-    for upstream in upstreams.iter() {
-        let is_healthy = match health_map.get(&upstream.hash_addr()) {
-            Some(is_healthy) => is_healthy.clone(),
-            _ => continue,
-        };
-
-        if is_healthy {
-            return Some(upstream.clone());
-        }
-
-        return None;
+    if is_healthy(&upstreams.0, &health_map) {
+        return Some(upstreams.0);
+    } else if is_healthy(&upstreams.1, &health_map) {
+        return Some(upstreams.1);
     }
 
     None
@@ -123,8 +157,11 @@ pub fn get_health_map() -> Arc<RwLock<HealthMap>> {
     HEALTH_MAP.clone()
 }
 
-pub fn get_upstreams() -> Option<Arc<Upstreams>> {
-    Some(UPSTREAMS.get()?.clone())
+pub fn get_upstreams() -> Option<(Arc<Upstream>, Arc<Upstream>)> {
+    Some((
+        DEFAULT_UPSTREAM.get()?.clone(),
+        FALLBACK_UPSTREAM.get()?.clone(),
+    ))
 }
 
 pub async fn bootstrap() -> Result<()> {
@@ -138,13 +175,11 @@ pub async fn bootstrap() -> Result<()> {
         Upstream::new(fallback_upstream),
     );
 
-    default_upstream.ext.insert(Processor::Default);
-    fallback_upstream.ext.insert(Processor::Fallback);
+    default_upstream.ext.insert(UpstreamType::Default);
+    fallback_upstream.ext.insert(UpstreamType::Fallback);
 
-    UPSTREAMS.set(Arc::new(BTreeSet::from([
-        default_upstream,
-        fallback_upstream,
-    ])))?;
+    DEFAULT_UPSTREAM.set(Arc::new(default_upstream))?;
+    FALLBACK_UPSTREAM.set(Arc::new(fallback_upstream))?;
 
     Ok(())
 }
