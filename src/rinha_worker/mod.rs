@@ -13,8 +13,6 @@ use std::str::FromStr;
 use tokio::net::TcpStream;
 
 async fn process_payment(payment: Payment) -> Result<()> {
-    // TODO: aqui eu vou precisar do host que vai virar a uri
-    // TODO: vou precisar saber se é o target ou o fallback
     let upstream = rinha_balancer::select()
         .await
         .ok_or_else(|| "Failed to get healthy upstream")?;
@@ -60,7 +58,10 @@ async fn process_payment(payment: Payment) -> Result<()> {
     }
 
     if status.is_server_error() {
-        // balancer.set_health(&upstream, false);
+        let health_map = rinha_balancer::get_health_map();
+        let mut health_map = health_map.write().await;
+        health_map.insert(upstream.hash_addr(), false);
+
         // TODO: força um retry pra não ter drop de processamento
     }
 

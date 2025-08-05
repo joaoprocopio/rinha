@@ -104,32 +104,31 @@ async fn check() -> Result<()> {
     Ok(())
 }
 
-fn is_healthy(upstream: &Upstream, health_map: &HealthMap) -> bool {
-    match health_map.get(&upstream.hash_addr()) {
-        Some(is_healthy) => is_healthy.clone(),
-        _ => false,
-    }
-}
-
 pub async fn select() -> Option<Arc<Upstream>> {
     let upstreams = get_upstreams()?;
     let health_map = get_health_map();
     let health_map = health_map.read().await;
 
-    if is_healthy(&upstreams.0, &health_map) {
+    if *health_map
+        .get(&upstreams.0.hash_addr())
+        .unwrap_or_else(|| &false)
+    {
         return Some(upstreams.0);
-    } else if is_healthy(&upstreams.1, &health_map) {
+    } else if *health_map
+        .get(&upstreams.1.hash_addr())
+        .unwrap_or_else(|| &false)
+    {
         return Some(upstreams.1);
     }
 
     None
 }
 
-fn get_health_map() -> Arc<RwLock<HealthMap>> {
+pub fn get_health_map() -> Arc<RwLock<HealthMap>> {
     HEALTH_MAP.clone()
 }
 
-fn get_upstreams() -> Option<(Arc<Upstream>, Arc<Upstream>)> {
+pub fn get_upstreams() -> Option<(Arc<Upstream>, Arc<Upstream>)> {
     Some((
         DEFAULT_UPSTREAM.get()?.clone(),
         FALLBACK_UPSTREAM.get()?.clone(),
