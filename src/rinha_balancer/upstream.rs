@@ -1,11 +1,14 @@
-use crate::rinha_core::Result;
 use http::Extensions;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::pin::Pin;
 use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 
-#[derive(Clone)]
+use crate::rinha_core::Result;
+
+#[derive(Clone, Debug)]
 pub struct Upstream {
     pub addr: SocketAddr,
     pub ext: Extensions,
@@ -56,12 +59,29 @@ impl Upstream {
 
 type Upstreams = BTreeSet<Upstream>;
 type HealthMap = HashMap<u64, bool>;
-type HealthCheck = (dyn Fn(&Upstream) -> dyn Future<Output = crate::rinha_core::Result<()>>);
+type HealthCheck = Box<
+    dyn for<'a> Fn(
+            &'a Upstream,
+        )
+            -> Pin<Box<dyn Future<Output = crate::rinha_core::Result<()>> + Send + 'a>>
+        + Send
+        + Sync,
+>;
 
-pub struct Balancer<HC: AsyncFn(&Upstream) -> Result<()>> {
+pub struct Balancer {
     upstreams: Arc<Upstreams>,
     health: Arc<RwLock<HealthMap>>,
-    health_check: HC,
+    health_check: HealthCheck,
+}
+
+impl std::fmt::Debug for Balancer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Balancer")
+            .field("upstreams", &self.upstreams)
+            .field("health", &self.health)
+            .field("health_check", &"<Fn>")
+            .finish()
+    }
 }
 
 impl Balancer {
@@ -87,7 +107,14 @@ impl Balancer {
         None
     }
 
-    pub async fn check(&self) -> () {}
+    pub async fn check(&self) -> Result<()> {
+        let checks = self.upstreams.iter();
+        let checks = checks.map(|upstream| (self.health_check)(upstream));
+
+        futures::future::try_join_all(checks).await?;
+
+        Ok(())
+    }
 
     fn get_backends(&self) -> Arc<Upstreams> {
         self.upstreams.clone()
