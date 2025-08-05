@@ -17,7 +17,6 @@ pub enum Processor {
 }
 
 async fn health_check(upstream: &Upstream) -> Result<()> {
-    dbg!(upstream);
     Ok(())
 }
 

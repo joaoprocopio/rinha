@@ -1,8 +1,12 @@
-use std::str::FromStr;
+use std::{os::unix::process, str::FromStr};
 
 use crate::{
-    rinha_balancer::Processor, rinha_chan, rinha_conf, rinha_core::Result, rinha_domain::Payment,
-    rinha_net::JSON_CONTENT_TYPE, rinha_storage,
+    rinha_balancer::{self, Processor},
+    rinha_chan, rinha_conf,
+    rinha_core::Result,
+    rinha_domain::Payment,
+    rinha_net::JSON_CONTENT_TYPE,
+    rinha_storage,
 };
 use http_body_util::{BodyExt, Full};
 use hyper::{Method, Request, Uri, body::Bytes, client::conn::http1, header};
@@ -17,14 +21,22 @@ async fn process_payment(payment: Payment) -> Result<()> {
 
     tokio::spawn(async move {
         if let Err(err) = conn.await {
-            tracing::error!(?err, "connection error");
+            tracing::error!(?err, "Connection error");
         }
     });
 
-    let uri = format!(
-        "http://{}/payments",
-        *rinha_conf::RINHA_DEFAULT_UPSTREAM_ADDR
-    );
+    let balancer = rinha_balancer::get_balancer()?;
+    // TODO: fazer o retry, aqui tá aceitando os drops
+    let upstream = balancer
+        .select()
+        .await
+        .ok_or_else(|| "Failed to get healhy upstream")?;
+    let processor = upstream
+        .ext
+        .get::<Processor>()
+        .ok_or_else(|| "No Processor enum field is found")?;
+
+    let uri = format!("http://{}/payments", upstream.addr);
     // TODO: aqui eu vou precisar do host que vai virar a uri
     // TODO: vou precisar saber se é o target ou o fallback
     let uri = Uri::from_str(uri.as_str())?;
@@ -46,13 +58,13 @@ async fn process_payment(payment: Payment) -> Result<()> {
         let storage = rinha_storage::get_storage();
         let mut storage = storage.write().await;
         let storage = storage
-            .get_mut(&Processor::Default)
+            .get_mut(&processor)
             .ok_or("Unable to get mutable reference to storage")?;
         storage.insert(payment.requested_at, payment.amount);
     }
 
     if status.is_server_error() {
-        // TODO: marca esse backend como não-saudável
+        // balancer.set_health(&upstream, false);
         // TODO: força um retry pra não ter drop de processamento
     }
 
