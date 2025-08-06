@@ -8,7 +8,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use http_body_util::{BodyExt, Full};
 use hyper::{
     Request, Response, StatusCode,
-    body::{Buf, Bytes, Incoming},
+    body::{Bytes, Incoming},
     header,
 };
 
@@ -25,8 +25,8 @@ pub enum PaymentsError {
 }
 
 pub async fn payments(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, PaymentsError> {
-    let body = req.collect().await?.aggregate();
-    let payment = serde_json::from_reader::<_, Payment>(body.reader())?;
+    let body = req.into_body().collect().await?.to_bytes();
+    let payment = serde_json::from_slice::<Payment>(&body)?;
     let sender = rinha_chan::get_sender();
     sender.send(payment).await?;
 
