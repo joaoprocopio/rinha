@@ -13,7 +13,7 @@ use tokio::time::Duration;
 
 pub const JSON_CONTENT_TYPE: &'static str = "application/json";
 
-const IPTOS_LOWDELAY: u32 = 16;
+const IPTOS_LOWDELAY: u32 = (0u8 | 0x10) as u32;
 const BACKLOCK_BUFFER_SIZE: i32 = 4096;
 const SEND_BUFFER_SIZE: usize = 1024;
 const RECV_BUFFER_SIZE: usize = 1024;
