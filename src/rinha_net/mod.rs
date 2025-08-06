@@ -20,6 +20,8 @@ const TTL: u32 = 128;
 const BACKLOCK_BUFFER_SIZE: i32 = 8 * 1024;
 const SEND_BUFFER_SIZE: usize = 64 * 1024;
 const RECV_BUFFER_SIZE: usize = 64 * 1024;
+const TCP_USER_TIMEOUT: Duration = Duration::from_millis(100);
+const TCP_LINGER: Duration = Duration::ZERO;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ResolveSocketAddrError {
@@ -76,6 +78,8 @@ fn set_sock_opt_conf(socket: &Socket) -> Result<(), std::io::Error> {
     socket.set_tos_v4(IPTOS_LOWDELAY)?;
     socket.set_send_buffer_size(SEND_BUFFER_SIZE)?;
     socket.set_recv_buffer_size(RECV_BUFFER_SIZE)?;
+    socket.set_tcp_user_timeout(Some(TCP_USER_TIMEOUT))?;
+    socket.set_linger(Some(TCP_LINGER))?;
 
     Ok(())
 }
