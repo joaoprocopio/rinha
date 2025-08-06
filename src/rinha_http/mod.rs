@@ -1,7 +1,6 @@
 use crate::{
     rinha_ambulance::UpstreamType,
     rinha_chan,
-    rinha_core::Result,
     rinha_domain::{Payment, TargetCounter},
     rinha_net::JSON_CONTENT_TYPE,
     rinha_storage,

@@ -1,13 +1,11 @@
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-use crate::rinha_core::Result;
 use tokio::net::TcpListener;
 
 mod rinha_ambulance;
 mod rinha_chan;
 mod rinha_conf;
-mod rinha_core;
 mod rinha_domain;
 mod rinha_http;
 mod rinha_net;

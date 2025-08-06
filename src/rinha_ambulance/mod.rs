@@ -1,5 +1,5 @@
 use crate::rinha_domain::Health;
-use crate::{rinha_conf, rinha_core::Result, rinha_net::resolve_socket_addr};
+use crate::{rinha_conf, rinha_net::resolve_socket_addr};
 use derivative::Derivative;
 use http::{Extensions, Method, Request, Uri, header};
 use http_body_util::{BodyExt, Empty};

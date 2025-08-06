@@ -1,4 +1,4 @@
-use crate::{rinha_core::Result, rinha_http};
+use crate::rinha_http;
 use http_body_util::combinators::BoxBody;
 use hyper::{
     Method, Request, Response,
@@ -21,14 +21,32 @@ const BACKLOCK_BUFFER_SIZE: i32 = 8 * 1024;
 const SEND_BUFFER_SIZE: usize = 64 * 1024;
 const RECV_BUFFER_SIZE: usize = 64 * 1024;
 
-pub async fn resolve_socket_addr<T: ToSocketAddrs>(addr: T) -> Result<SocketAddr> {
+#[derive(thiserror::Error, Debug)]
+pub enum ResolveSocketAddrError {
+    #[error("io")]
+    IO(#[from] std::io::Error),
+    #[error("unmatched")]
+    Unmatched,
+}
+
+pub async fn resolve_socket_addr<T: ToSocketAddrs>(
+    addr: T,
+) -> Result<SocketAddr, ResolveSocketAddrError> {
     let mut addrs = lookup_host(addr).await?;
-    let addr = addrs.next().ok_or_else(|| "Couldn't match an address")?;
+    let addr = addrs
+        .next()
+        .ok_or_else(|| ResolveSocketAddrError::Unmatched)?;
 
     Ok(addr)
 }
 
-pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
+#[derive(thiserror::Error, Debug)]
+pub enum CreateTCPSocketError {
+    #[error("io")]
+    IO(#[from] std::io::Error),
+}
+
+pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket, CreateTCPSocketError> {
     let domain = match addr {
         SocketAddr::V4(_) => Domain::IPV4,
         SocketAddr::V6(_) => Domain::IPV6,
@@ -94,7 +112,13 @@ where
     Ok(sender)
 }
 
-pub async fn accept_loop(tcp_listener: TcpListener) -> Result<()> {
+#[derive(thiserror::Error, Debug)]
+pub enum AcceptLoopError {
+    #[error("io")]
+    IO(#[from] std::io::Error),
+}
+
+pub async fn accept_loop(tcp_listener: TcpListener) -> Result<(), AcceptLoopError> {
     let mut http = server::conn::http1::Builder::new();
 
     http.writev(true);
@@ -117,7 +141,9 @@ pub async fn accept_loop(tcp_listener: TcpListener) -> Result<()> {
     }
 }
 
-pub async fn router(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>> {
+pub async fn router(
+    req: Request<Incoming>,
+) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     match (req.method(), req.uri().path()) {
         (&Method::POST, "/payments") => rinha_http::payments(req).await,
         (&Method::GET, "/payments-summary") => rinha_http::payments_summary(req).await,
