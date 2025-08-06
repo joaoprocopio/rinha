@@ -43,7 +43,7 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
     Ok(socket)
 }
 
-fn set_sock_opt_conf(socket: &Socket) -> Result<()> {
+fn set_sock_opt_conf(socket: &Socket) -> Result<(), std::io::Error> {
     let mut keepalive = TcpKeepalive::new();
     keepalive = keepalive.with_time(Duration::from_secs(90));
     keepalive = keepalive.with_interval(Duration::from_secs(30));
@@ -62,9 +62,17 @@ fn set_sock_opt_conf(socket: &Socket) -> Result<()> {
     Ok(())
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum CreateTCPSenderError {
+    #[error("io")]
+    IO(#[from] std::io::Error),
+    #[error("error")]
+    Hyper(#[from] hyper::Error),
+}
+
 pub async fn create_tcp_socket_sender<B>(
     addr: SocketAddr,
-) -> Result<client::conn::http1::SendRequest<B>>
+) -> Result<client::conn::http1::SendRequest<B>, CreateTCPSenderError>
 where
     B: Body + 'static + Send,
     B::Data: Send,
