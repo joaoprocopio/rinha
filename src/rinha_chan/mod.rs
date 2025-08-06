@@ -6,7 +6,7 @@ pub type PaymentSendError = mpsc::error::SendError<Payment>;
 pub type PaymentReceiver = mpsc::Receiver<Payment>;
 pub type PaymentSender = mpsc::Sender<Payment>;
 
-const CHANNEL_BUFFER: usize = ((size_of::<Payment>() as f64) * 1024.0 * 3.125) as usize; // 128 kB
+const CHANNEL_BUFFER: usize = size_of::<Payment>() * (8 << 9) as usize;
 
 static CHANNEL: LazyLock<(Arc<PaymentSender>, Arc<Mutex<PaymentReceiver>>)> = LazyLock::new(|| {
     let channel = mpsc::channel::<Payment>(CHANNEL_BUFFER);
