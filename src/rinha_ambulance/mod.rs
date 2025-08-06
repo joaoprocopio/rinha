@@ -84,7 +84,7 @@ async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health), TryCheckE
 
     tokio::spawn(async move {
         if let Err(err) = conn.await {
-            tracing::error!(?err);
+            tracing::error!(?err, "try check");
         }
     });
 
@@ -198,7 +198,7 @@ pub async fn task() {
         tokio::select! {
             _ = ticker.tick() => {
                 if let Err(err) = check().await {
-                    tracing::error!(?err)
+                    tracing::error!(?err, "ambulance task")
                 }
             }
         }

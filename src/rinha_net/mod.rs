@@ -20,7 +20,7 @@ const TTL: u32 = 128;
 const BACKLOCK_BUFFER_SIZE: i32 = 8 * 1024;
 const SEND_BUFFER_SIZE: usize = 64 * 1024;
 const RECV_BUFFER_SIZE: usize = 64 * 1024;
-const TCP_USER_TIMEOUT: Duration = Duration::from_millis(100);
+const TCP_USER_TIMEOUT: Duration = Duration::from_millis(250);
 const TCP_LINGER: Duration = Duration::ZERO;
 
 #[derive(thiserror::Error, Debug)]
@@ -109,7 +109,7 @@ where
 
     tokio::spawn(async move {
         if let Err(err) = conn.await {
-            tracing::error!(?err);
+            tracing::error!(?err, "socket sender");
         }
     });
 
@@ -139,7 +139,7 @@ pub async fn accept_loop(tcp_listener: TcpListener) -> Result<(), AcceptLoopErro
         tokio::spawn(async move {
             let io = TokioIo::new(stream);
             if let Err(err) = http.serve_connection(io, service).await {
-                tracing::error!(?err);
+                tracing::error!(?err, "accept loop");
             };
         });
     }

@@ -31,7 +31,7 @@ enum MainError {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), MainError> {
-    tracing_subscriber::fmt().with_thread_ids(true).init();
+    tracing_subscriber::fmt().init();
 
     rinha_chan::boostrap();
     rinha_conf::bootstrap();

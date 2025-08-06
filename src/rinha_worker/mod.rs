@@ -1,5 +1,6 @@
 use crate::{
-    rinha_ambulance, rinha_chan,
+    rinha_ambulance::{self, Upstream},
+    rinha_chan,
     rinha_domain::Payment,
     rinha_net::{self, JSON_CONTENT_TYPE},
     rinha_storage,
@@ -7,6 +8,7 @@ use crate::{
 use http_body_util::{BodyExt, Full};
 use hyper::{Method, Request, Uri, body::Bytes, header};
 use std::str::FromStr;
+use tokio::time::{Duration, sleep};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PaymentError {
@@ -21,22 +23,17 @@ pub enum PaymentError {
     #[error("tcp")]
     Sender(#[from] rinha_net::CreateTCPSenderError),
 
-    #[error("no healthy upstream")]
-    NoHealthyUpstream,
     #[error("no upstream type ext")]
     NoUpstreamTypeExt,
     #[error("unstored upstream type")]
     UnstoredUpstreamType,
     #[error("request failed")]
-    RequestFailed,
+    ServerFailed,
     #[error("invalid authority")]
     InvalidAuthority,
 }
 
-async fn try_process_payment(payment: Payment) -> Result<(), PaymentError> {
-    let upstream = rinha_ambulance::select()
-        .await
-        .ok_or_else(|| PaymentError::NoHealthyUpstream)?;
+async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(), PaymentError> {
     let upstream_type = upstream
         .ext
         .get::<rinha_ambulance::UpstreamType>()
@@ -70,16 +67,10 @@ async fn try_process_payment(payment: Payment) -> Result<(), PaymentError> {
     }
 
     if status.is_server_error() {
-        return Err(PaymentError::RequestFailed);
+        return Err(PaymentError::ServerFailed);
     }
 
     Ok(())
-}
-
-async fn process_payment(payment: Payment) {
-    if let Err(err) = try_process_payment(payment).await {
-        tracing::error!(?err);
-    }
 }
 
 pub async fn task() {
@@ -90,8 +81,39 @@ pub async fn task() {
         tokio::select! {
             Some(payment) = receiver.recv() => {
                 tokio::spawn(async move {
-                    process_payment(payment).await;
-                })
+                    let mut upstream_retry: u32 = 0;
+                    let mut payment_retries: u32 = 0;
+
+                    loop {
+                        if let Some(upstream) = rinha_ambulance::select().await {
+                            if let Err(err) = try_process_payment(&payment, &upstream).await {
+                                if let PaymentError::ServerFailed = err {
+                                    let health_map = rinha_ambulance::get_health_map();
+                                    let mut health_map = health_map.write().await;
+                                    health_map.insert(upstream.hash_addr(), false);
+
+                                    let time = std::cmp::min(
+                                        Duration::from_millis(5) * (1 << payment_retries),
+                                        Duration::from_secs(10),
+                                    );
+                                    sleep(time).await;
+                                    payment_retries += 1;
+                                    continue;
+                                }
+                            } else {
+                                break;
+                            }
+                        } else {
+                            let time = std::cmp::min(
+                                Duration::from_millis(5) * (1 << upstream_retry),
+                                Duration::from_secs(10),
+                            );
+                            sleep(time).await;
+                            upstream_retry += 1;
+                            continue;
+                        }
+                    }
+                });
             }
         };
     }
