@@ -32,6 +32,7 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
     let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(75));
 
     socket.set_tcp_keepalive(&keepalive)?;
+    socket.set_tcp_quickack(true)?;
     socket.set_reuse_address(true)?;
     socket.set_reuse_port(true)?;
     socket.set_tcp_nodelay(true)?;
