@@ -2,26 +2,50 @@ use crate::rinha_http;
 use http_body_util::Full;
 use hyper::{
     Method, Request, Response,
-    body::{Body, Bytes, Incoming},
-    client, server, service,
+    body::{Bytes, Incoming},
+    server, service,
 };
-use hyper_util::rt::{TokioIo, TokioTimer};
+use hyper_util::{
+    client::legacy::{Client, connect::HttpConnector},
+    rt::{TokioExecutor, TokioIo, TokioTimer},
+};
 use socket2::{Domain, Protocol, SockAddr, Socket, TcpKeepalive, Type};
-use std::{error::Error as StdError, net::SocketAddr};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, LazyLock},
+};
 use tokio::{
-    net::{TcpListener, TcpStream, ToSocketAddrs, lookup_host},
+    net::{TcpListener, ToSocketAddrs, lookup_host},
     time::Duration,
 };
 
+static CLIENT: LazyLock<Arc<Client<HttpConnector, Full<Bytes>>>> = LazyLock::new(|| {
+    let mut client = Client::builder(TokioExecutor::new());
+    client.pool_timer(TokioTimer::new());
+    client.pool_idle_timeout(KEEPALIVE_TIME);
+
+    let mut conn = HttpConnector::new();
+    conn.set_keepalive(Some(KEEPALIVE_TIME));
+    conn.set_keepalive_interval(Some(KEEPALIVE_INTERVAL));
+    conn.set_tcp_user_timeout(Some(USER_TIMEOUT));
+    conn.set_nodelay(NODELAY);
+    conn.set_reuse_address(true);
+
+    Arc::new(client.build(conn))
+});
+
 pub const JSON_CONTENT_TYPE: &'static str = "application/json";
 
-const IPTOS_LOWDELAY: u32 = (0u8 | 0x10) as u32;
 const TTL: u32 = 128;
+const NODELAY: bool = true;
+const IPTOS_LOWDELAY: u32 = (0u8 | 0x10) as u32;
+const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
+const KEEPALIVE_TIME: Duration = Duration::from_secs(90);
 const BACKLOCK_BUFFER_SIZE: i32 = 8 * 1024;
 const SEND_BUFFER_SIZE: usize = 64 * 1024;
 const RECV_BUFFER_SIZE: usize = 64 * 1024;
-const TCP_USER_TIMEOUT: Duration = Duration::from_millis(250);
-const TCP_LINGER: Duration = Duration::ZERO;
+const USER_TIMEOUT: Duration = Duration::from_secs(1);
+const LINGER: Duration = Duration::ZERO;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ResolveSocketAddrError {
@@ -65,55 +89,27 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket, CreateTCPSocketErro
 
 fn set_sock_opt_conf(socket: &Socket) -> Result<(), std::io::Error> {
     let mut keepalive = TcpKeepalive::new();
-    keepalive = keepalive.with_time(Duration::from_secs(90));
-    keepalive = keepalive.with_interval(Duration::from_secs(30));
+    keepalive = keepalive.with_time(KEEPALIVE_TIME);
+    keepalive = keepalive.with_interval(KEEPALIVE_INTERVAL);
 
     socket.set_tcp_keepalive(&keepalive)?;
     socket.set_tcp_quickack(true)?;
     socket.set_reuse_address(true)?;
     socket.set_reuse_port(true)?;
-    socket.set_tcp_nodelay(true)?;
+    socket.set_tcp_nodelay(NODELAY)?;
     socket.set_nonblocking(true)?;
     socket.set_ttl_v4(TTL)?;
     socket.set_tos_v4(IPTOS_LOWDELAY)?;
     socket.set_send_buffer_size(SEND_BUFFER_SIZE)?;
     socket.set_recv_buffer_size(RECV_BUFFER_SIZE)?;
-    socket.set_tcp_user_timeout(Some(TCP_USER_TIMEOUT))?;
-    socket.set_linger(Some(TCP_LINGER))?;
+    socket.set_tcp_user_timeout(Some(USER_TIMEOUT))?;
+    socket.set_linger(Some(LINGER))?;
 
     Ok(())
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum CreateTCPSenderError {
-    #[error("io")]
-    IO(#[from] std::io::Error),
-    #[error("hyper")]
-    Hyper(#[from] hyper::Error),
-}
-
-pub async fn create_tcp_socket_sender<B>(
-    addr: SocketAddr,
-) -> Result<client::conn::http1::SendRequest<B>, CreateTCPSenderError>
-where
-    B: Body + 'static + Send,
-    B::Data: Send,
-    B::Error: Into<Box<dyn StdError + Send + Sync>>,
-{
-    let stream = TcpStream::connect(addr).await?;
-    let socket = socket2::SockRef::from(&stream);
-    set_sock_opt_conf(&socket)?;
-
-    let io = TokioIo::new(stream);
-    let (sender, conn) = client::conn::http1::handshake::<TokioIo<TcpStream>, B>(io).await?;
-
-    tokio::spawn(async move {
-        if let Err(err) = conn.await {
-            tracing::error!(?err, "socket sender");
-        }
-    });
-
-    Ok(sender)
+pub fn get_client() -> Arc<Client<HttpConnector, Full<Bytes>>> {
+    CLIENT.clone()
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -162,4 +158,8 @@ pub async fn router(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Rou
         (&Method::GET, "/payments-summary") => Ok(rinha_http::payments_summary(req).await?),
         _ => Ok(rinha_http::not_found().await?),
     }
+}
+
+pub fn bootstrap() {
+    LazyLock::force(&CLIENT);
 }

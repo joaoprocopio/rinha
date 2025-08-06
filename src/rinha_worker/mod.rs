@@ -18,10 +18,8 @@ pub enum PaymentError {
     HTTP(#[from] http::Error),
     #[error("uri")]
     URI(#[from] http::uri::InvalidUri),
-    #[error("hyper")]
-    Hyper(#[from] hyper::Error),
-    #[error("tcp")]
-    Sender(#[from] rinha_net::CreateTCPSenderError),
+    #[error("client")]
+    Client(#[from] hyper_util::client::legacy::Error),
 
     #[error("no upstream type ext")]
     NoUpstreamTypeExt,
@@ -37,7 +35,8 @@ async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(
         .get::<rinha_ambulance::UpstreamType>()
         .ok_or_else(|| PaymentError::NoUpstreamTypeExt)?;
 
-    let mut sender = rinha_net::create_tcp_socket_sender(upstream.addr).await?;
+    let client = rinha_net::get_client();
+
     let uri = format!("http://{}/payments", upstream.addr);
     let uri = Uri::from_str(uri.as_str())?;
     let authority = uri
@@ -52,7 +51,7 @@ async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(
         .uri(uri)
         .body(Full::<Bytes>::from(payment_ser))?;
 
-    let res = sender.send_request(req).await?;
+    let res = client.request(req).await?;
     let status = res.status();
 
     if status.is_success() {

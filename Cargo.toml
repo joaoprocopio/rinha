@@ -16,6 +16,7 @@ hyper = { version = "1.6.0", features = [
 hyper-util = { version = "0.1.16", features = [
     "tokio",
     "client",
+    "client-legacy",
     "server",
     "http1"
 ] }
@@ -39,6 +40,10 @@ uuid = { version = "1.17.0", features = ["serde", "v4"] }
 
 [profile.release]
 opt-level = 3
+# # flamegraph: echo -1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+# debug = true
+# strip = false
+# # default
 debug = false
 strip = true
 debug-assertions = false

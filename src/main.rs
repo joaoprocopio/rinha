@@ -33,6 +33,7 @@ enum MainError {
 async fn main() -> Result<(), MainError> {
     tracing_subscriber::fmt().init();
 
+    rinha_net::bootstrap();
     rinha_chan::boostrap();
     rinha_conf::bootstrap();
     rinha_storage::bootstrap();

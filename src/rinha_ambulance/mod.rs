@@ -3,8 +3,8 @@ use crate::rinha_net;
 use crate::{rinha_conf, rinha_net::resolve_socket_addr};
 use derivative::Derivative;
 use http::{Extensions, Method, Request, Uri, header};
-use http_body_util::{BodyExt, Empty};
-use hyper::body::{Buf, Bytes};
+use http_body_util::{BodyExt, Full};
+use hyper::body::Bytes;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::net::SocketAddr;
@@ -66,15 +66,17 @@ pub enum TryCheckError {
     Serde(#[from] serde_json::Error),
     #[error("uri")]
     URI(#[from] http::uri::InvalidUri),
+    #[error("client")]
+    Client(#[from] hyper_util::client::legacy::Error),
 
-    #[error("tcp sender")]
-    TCPSender(#[from] rinha_net::CreateTCPSenderError),
     #[error("invalid authority")]
     InvalidAuthority,
+    #[error("never")]
+    Infallible(#[from] std::convert::Infallible),
 }
 
 async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health), TryCheckError> {
-    let mut sender = rinha_net::create_tcp_socket_sender(upstream.addr).await?;
+    let client = rinha_net::get_client();
     let uri = format!("http://{}/payments/service-health", upstream.addr);
     let uri = Uri::from_str(uri.as_str())?;
     let authority = uri
@@ -85,11 +87,12 @@ async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health), TryCheckE
         .method(Method::GET)
         .header(header::HOST, authority.as_str())
         .uri(uri)
-        .body(Empty::<Bytes>::new())?;
+        .body(Full::new(Bytes::new()))?;
 
-    let res = sender.send_request(req).await?;
-    let body = res.collect().await?.aggregate();
-    let health: Health = serde_json::from_reader(body.reader())?;
+    let res = client.request(req).await?;
+    let body = res.into_body().collect().await?.to_bytes();
+
+    let health: Health = serde_json::from_slice(&body)?;
 
     Ok((upstream, health))
 }
