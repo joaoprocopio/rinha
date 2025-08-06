@@ -95,8 +95,8 @@ pub async fn payments_summary(
     }
 
     for (_, amount) in fallback_storage.range(from..=to) {
-        target_counter.default.requests += 1;
-        target_counter.default.amount += amount;
+        target_counter.fallback.requests += 1;
+        target_counter.fallback.amount += amount;
     }
 
     let body = serde_json::to_string(&target_counter)?;
