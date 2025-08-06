@@ -182,12 +182,10 @@ pub async fn task() {
     let mut ticker = interval(Duration::from_secs(5));
 
     loop {
-        tokio::select! {
-            _ = ticker.tick() => {
-                if let Err(err) = check().await {
-                    tracing::error!(?err, "ambulance task")
-                }
-            }
+        ticker.tick().await;
+
+        if let Err(err) = check().await {
+            tracing::error!(?err, "ambulance task")
         }
     }
 }

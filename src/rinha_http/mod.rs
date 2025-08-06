@@ -22,19 +22,13 @@ pub enum PaymentsError {
     HTTP(#[from] http::Error),
     #[error("send")]
     Send(#[from] rinha_chan::PaymentSendError),
-    #[error("spawn")]
-    Spawn(#[from] tokio::task::JoinError),
 }
 
 pub async fn payments(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, PaymentsError> {
     let body = req.collect().await?.aggregate();
     let payment = serde_json::from_reader::<_, Payment>(body.reader())?;
-
-    let _ = tokio::task::spawn_blocking(move || {
-        let sender = rinha_chan::get_sender();
-        sender.send(payment)
-    })
-    .await??;
+    let sender = rinha_chan::get_sender();
+    sender.send(payment).await?;
 
     Ok(Response::builder()
         .status(StatusCode::OK)

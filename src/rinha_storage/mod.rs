@@ -4,7 +4,7 @@ use std::{
 };
 use tokio::sync::RwLock;
 
-type Storage = BTreeMap<i64, f64>;
+pub type Storage = BTreeMap<i64, f64>;
 
 static DEFAULT_STORAGE: LazyLock<Arc<RwLock<Storage>>> =
     LazyLock::new(|| Arc::new(RwLock::new(Storage::new())));

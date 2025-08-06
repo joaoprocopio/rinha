@@ -1,25 +1,25 @@
 use crate::rinha_domain::Payment;
-use crossbeam::channel;
 use std::sync::LazyLock;
+use tokio::sync::{Mutex, mpsc};
 
-pub type PaymentSendError = channel::SendError<Payment>;
-pub type PaymentReceiver = channel::Receiver<Payment>;
-pub type PaymentSender = channel::Sender<Payment>;
+pub type PaymentSendError = mpsc::error::SendError<Payment>;
+pub type PaymentReceiver = mpsc::Receiver<Payment>;
+pub type PaymentSender = mpsc::Sender<Payment>;
 
 const CHANNEL_BUFFER: usize = size_of::<Payment>() * (8 << 9) as usize;
 
-static CHANNEL: LazyLock<(PaymentSender, PaymentReceiver)> = LazyLock::new(|| {
-    let channel = channel::bounded::<Payment>(CHANNEL_BUFFER);
+static CHANNEL: LazyLock<(PaymentSender, Mutex<PaymentReceiver>)> = LazyLock::new(|| {
+    let channel = mpsc::channel::<Payment>(CHANNEL_BUFFER);
 
-    (channel.0, channel.1)
+    (channel.0, Mutex::new(channel.1))
 });
 
 pub fn get_sender() -> PaymentSender {
     CHANNEL.0.clone()
 }
 
-pub fn get_receiver() -> PaymentReceiver {
-    CHANNEL.1.clone()
+pub fn get_receiver() -> &'static Mutex<PaymentReceiver> {
+    &CHANNEL.1
 }
 
 pub fn boostrap() {

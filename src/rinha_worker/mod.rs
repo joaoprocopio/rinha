@@ -108,15 +108,14 @@ async fn process_payment(payment: &Payment) {
 }
 
 pub async fn task() {
-    loop {
-        let receiver = rinha_chan::get_receiver();
+    let receiver = rinha_chan::get_receiver();
+    let mut receiver = receiver.lock().await;
 
-        if let Ok(Ok(payment)) = tokio::task::spawn_blocking(move || receiver.recv()).await {
+    loop {
+        if let Some(payment) = receiver.recv().await {
             tokio::spawn(async move {
                 process_payment(&payment).await;
             });
-        } else {
-            tracing::error!("unexpected error occurred while recv");
-        };
+        }
     }
 }
