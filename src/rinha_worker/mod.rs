@@ -73,8 +73,8 @@ async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(
 }
 
 async fn process_payment(payment: &Payment) {
-    let mut upstream_retry: u32 = 0;
-    let mut payment_retry: u32 = 0;
+    let mut upstream_attempt: u32 = 0;
+    let mut payment_attempt: u32 = 0;
 
     loop {
         if let Some(upstream) = rinha_ambulance::select().await {
@@ -84,27 +84,35 @@ async fn process_payment(payment: &Payment) {
                     let mut health_map = health_map.write().await;
                     health_map.insert(upstream.hash_addr(), false);
 
-                    let time = std::cmp::min(
-                        Duration::from_millis(5) * (1 << payment_retry),
-                        Duration::from_secs(10),
-                    );
-                    sleep(time).await;
-                    payment_retry += 1;
+                    sleep(backoff(
+                        Duration::from_millis(10),
+                        payment_attempt,
+                        Duration::from_secs(5),
+                    ))
+                    .await;
+                    payment_attempt += 1;
                     continue;
                 }
             } else {
                 break;
             }
         } else {
-            let time = std::cmp::min(
-                Duration::from_millis(5) * (1 << upstream_retry),
+            sleep(backoff(
+                Duration::from_millis(50),
+                upstream_attempt,
                 Duration::from_secs(10),
-            );
-            sleep(time).await;
-            upstream_retry += 1;
+            ))
+            .await;
+            upstream_attempt += 1;
             continue;
         }
     }
+}
+
+fn backoff(base: Duration, attempt: u32, max: Duration) -> Duration {
+    let exp = 1 << attempt;
+    let delay = base * exp;
+    std::cmp::min(delay, max)
 }
 
 pub async fn task() {
