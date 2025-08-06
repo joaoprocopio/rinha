@@ -6,13 +6,12 @@ use crate::{
     rinha_storage,
 };
 use chrono::{DateTime, TimeZone, Utc};
-use http_body_util::{BodyExt, Empty, Full, combinators::BoxBody};
+use http_body_util::{BodyExt, Full};
 use hyper::{
     Request, Response, StatusCode,
     body::{Buf, Bytes, Incoming},
     header,
 };
-use std::convert::Infallible;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PaymentsError {
@@ -28,9 +27,7 @@ pub enum PaymentsError {
     Spawn(#[from] tokio::task::JoinError),
 }
 
-pub async fn payments(
-    req: Request<Incoming>,
-) -> Result<Response<BoxBody<Bytes, Infallible>>, PaymentsError> {
+pub async fn payments(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, PaymentsError> {
     let body = req.collect().await?.aggregate();
     let payment = serde_json::from_reader::<_, Payment>(body.reader())?;
 
@@ -42,7 +39,7 @@ pub async fn payments(
 
     Ok(Response::builder()
         .status(StatusCode::OK)
-        .body(Empty::<Bytes>::new().boxed())?)
+        .body(Full::new(Bytes::new()))?)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -62,7 +59,7 @@ pub enum PaymentsSummaryError {
 
 pub async fn payments_summary(
     req: Request<Incoming>,
-) -> Result<Response<BoxBody<Bytes, Infallible>>, PaymentsSummaryError> {
+) -> Result<Response<Full<Bytes>>, PaymentsSummaryError> {
     let mut from = Utc
         .timestamp_opt(0, 0)
         .single()
@@ -105,12 +102,12 @@ pub async fn payments_summary(
         target_counter.fallback.amount += amount;
     }
 
-    let body = serde_json::to_string(&target_counter)?;
+    let body = serde_json::to_vec(&target_counter)?;
 
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
         .status(StatusCode::OK)
-        .body(Full::from(body).boxed())?)
+        .body(Full::new(body.into()))?)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -119,8 +116,8 @@ pub enum NotFoundError {
     HTTP(#[from] http::Error),
 }
 
-pub async fn not_found() -> Result<Response<BoxBody<Bytes, Infallible>>, NotFoundError> {
+pub async fn not_found() -> Result<Response<Full<Bytes>>, NotFoundError> {
     Ok(Response::builder()
         .status(StatusCode::NOT_FOUND)
-        .body(Empty::<Bytes>::new().boxed())?)
+        .body(Full::new(Bytes::new()))?)
 }

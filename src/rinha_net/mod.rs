@@ -1,5 +1,5 @@
 use crate::rinha_http;
-use http_body_util::combinators::BoxBody;
+use http_body_util::Full;
 use hyper::{
     Method, Request, Response,
     body::{Body, Bytes, Incoming},
@@ -7,7 +7,7 @@ use hyper::{
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
 use socket2::{Domain, Protocol, SockAddr, Socket, TcpKeepalive, Type};
-use std::{convert::Infallible, error::Error as StdError, net::SocketAddr};
+use std::{error::Error as StdError, net::SocketAddr};
 use tokio::{
     net::{TcpListener, TcpStream, ToSocketAddrs, lookup_host},
     time::Duration,
@@ -129,6 +129,7 @@ pub async fn accept_loop(tcp_listener: TcpListener) -> Result<(), AcceptLoopErro
     http.timer(TokioTimer::new());
     http.pipeline_flush(true);
     http.half_close(false);
+    http.keep_alive(true);
 
     let service = service::service_fn(router);
 
@@ -155,9 +156,7 @@ pub enum RouterError {
     NotFound(#[from] rinha_http::NotFoundError),
 }
 
-pub async fn router(
-    req: Request<Incoming>,
-) -> Result<Response<BoxBody<Bytes, Infallible>>, RouterError> {
+pub async fn router(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, RouterError> {
     match (req.method(), req.uri().path()) {
         (&Method::POST, "/payments") => Ok(rinha_http::payments(req).await?),
         (&Method::GET, "/payments-summary") => Ok(rinha_http::payments_summary(req).await?),

@@ -5,7 +5,7 @@ use crate::{
     rinha_net::{self, JSON_CONTENT_TYPE},
     rinha_storage,
 };
-use http_body_util::{BodyExt, Full};
+use http_body_util::Full;
 use hyper::{Method, Request, Uri, body::Bytes, header};
 use std::str::FromStr;
 use tokio::time::{Duration, sleep};
@@ -52,7 +52,7 @@ async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(
         .header(header::HOST, authority.as_str())
         .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
         .uri(uri)
-        .body(Full::<Bytes>::from(payment_ser).boxed())?;
+        .body(Full::<Bytes>::from(payment_ser))?;
 
     let res = sender.send_request(req).await?;
     let status = res.status();
