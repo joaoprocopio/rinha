@@ -12,8 +12,25 @@ mod rinha_net;
 mod rinha_storage;
 mod rinha_worker;
 
+#[derive(thiserror::Error, Debug)]
+enum MainError {
+    #[error("join error")]
+    JoinError(#[from] tokio::task::JoinError),
+    #[error("io")]
+    IO(#[from] std::io::Error),
+
+    #[error("accept loop ")]
+    AcceptLoop(#[from] rinha_net::AcceptLoopError),
+    #[error("ambulance")]
+    Ambulance(#[from] rinha_ambulance::BootstrapError),
+    #[error("resolve socket")]
+    ResolveSocket(#[from] rinha_net::ResolveSocketAddrError),
+    #[error("create socket")]
+    CreateSocket(#[from] rinha_net::CreateTCPSocketError),
+}
+
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), MainError> {
     tracing_subscriber::fmt().with_thread_ids(true).init();
 
     rinha_chan::boostrap();
@@ -36,5 +53,5 @@ async fn main() -> Result<()> {
     let tcp_listener = TcpListener::from_std(tcp_socket.into())?;
 
     let accept_loop = rinha_net::accept_loop(tcp_listener);
-    tokio::spawn(accept_loop).await?
+    Ok(tokio::spawn(accept_loop).await??)
 }
