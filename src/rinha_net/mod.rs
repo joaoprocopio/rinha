@@ -7,11 +7,16 @@ use hyper::{
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
 use socket2::{Domain, Protocol, SockAddr, Socket, TcpKeepalive, Type};
-use std::{convert::Infallible, error::Error as StdError, net::SocketAddr, time::Duration};
+use std::{convert::Infallible, error::Error as StdError, net::SocketAddr};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs, lookup_host};
+use tokio::time::Duration;
 
 pub const JSON_CONTENT_TYPE: &'static str = "application/json";
+
+const IPTOS_LOWDELAY: u32 = 16;
 const BACKLOCK_BUFFER_SIZE: i32 = 4096;
+const SEND_BUFFER_SIZE: usize = 1024;
+const RECV_BUFFER_SIZE: usize = 1024;
 
 pub async fn resolve_socket_addr<T: ToSocketAddrs>(addr: T) -> Result<SocketAddr> {
     let mut addrs = lookup_host(addr).await?;
@@ -37,7 +42,8 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
 
 fn set_sock_opt_conf(socket: &Socket) -> Result<()> {
     let mut keepalive = TcpKeepalive::new();
-    keepalive = keepalive.with_time(Duration::from_secs(75));
+    keepalive = keepalive.with_time(Duration::from_secs(30));
+    keepalive = keepalive.with_interval(Duration::from_secs(5));
 
     socket.set_tcp_keepalive(&keepalive)?;
     socket.set_tcp_quickack(true)?;
@@ -46,6 +52,9 @@ fn set_sock_opt_conf(socket: &Socket) -> Result<()> {
     socket.set_tcp_nodelay(true)?;
     socket.set_nonblocking(true)?;
     socket.set_ttl_v4(128)?;
+    socket.set_tos_v4(IPTOS_LOWDELAY)?;
+    socket.set_send_buffer_size(SEND_BUFFER_SIZE)?;
+    socket.set_recv_buffer_size(RECV_BUFFER_SIZE)?;
 
     Ok(())
 }

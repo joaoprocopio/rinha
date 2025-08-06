@@ -11,10 +11,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::sync::{OnceCell, RwLock};
-use tokio::time::interval;
+use tokio::time::{Duration, interval};
 
 type HealthMap = HashMap<u64, bool>;
 
