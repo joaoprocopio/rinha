@@ -73,48 +73,51 @@ async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(
     Ok(())
 }
 
-pub async fn task() {
-    let receiver = rinha_chan::get_receiver();
-    let mut receiver = receiver.lock().await;
+async fn process_payment(payment: &Payment) {
+    let mut upstream_retry: u32 = 0;
+    let mut payment_retry: u32 = 0;
 
     loop {
-        tokio::select! {
-            Some(payment) = receiver.recv() => {
-                tokio::spawn(async move {
-                    let mut upstream_retry: u32 = 0;
-                    let mut payment_retries: u32 = 0;
+        if let Some(upstream) = rinha_ambulance::select().await {
+            if let Err(err) = try_process_payment(&payment, &upstream).await {
+                if let PaymentError::ServerFailed = err {
+                    let health_map = rinha_ambulance::get_health_map();
+                    let mut health_map = health_map.write().await;
+                    health_map.insert(upstream.hash_addr(), false);
 
-                    loop {
-                        if let Some(upstream) = rinha_ambulance::select().await {
-                            if let Err(err) = try_process_payment(&payment, &upstream).await {
-                                if let PaymentError::ServerFailed = err {
-                                    let health_map = rinha_ambulance::get_health_map();
-                                    let mut health_map = health_map.write().await;
-                                    health_map.insert(upstream.hash_addr(), false);
-
-                                    let time = std::cmp::min(
-                                        Duration::from_millis(5) * (1 << payment_retries),
-                                        Duration::from_secs(10),
-                                    );
-                                    sleep(time).await;
-                                    payment_retries += 1;
-                                    continue;
-                                }
-                            } else {
-                                break;
-                            }
-                        } else {
-                            let time = std::cmp::min(
-                                Duration::from_millis(5) * (1 << upstream_retry),
-                                Duration::from_secs(10),
-                            );
-                            sleep(time).await;
-                            upstream_retry += 1;
-                            continue;
-                        }
-                    }
-                });
+                    let time = std::cmp::min(
+                        Duration::from_millis(5) * (1 << payment_retry),
+                        Duration::from_secs(10),
+                    );
+                    sleep(time).await;
+                    payment_retry += 1;
+                    continue;
+                }
+            } else {
+                break;
             }
+        } else {
+            let time = std::cmp::min(
+                Duration::from_millis(5) * (1 << upstream_retry),
+                Duration::from_secs(10),
+            );
+            sleep(time).await;
+            upstream_retry += 1;
+            continue;
+        }
+    }
+}
+
+pub async fn task() {
+    loop {
+        let receiver = rinha_chan::get_receiver();
+
+        if let Ok(Ok(payment)) = tokio::task::spawn_blocking(move || receiver.recv()).await {
+            tokio::spawn(async move {
+                process_payment(&payment).await;
+            });
+        } else {
+            tracing::error!("unexpected error occurred while recv");
         };
     }
 }
