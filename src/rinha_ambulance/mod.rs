@@ -5,14 +5,11 @@ use derivative::Derivative;
 use http::{Extensions, Method, Request, Uri, header};
 use http_body_util::{BodyExt, Empty};
 use hyper::body::{Buf, Bytes};
-use hyper::client::conn::http1;
-use hyper_util::rt::TokioIo;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
-use tokio::net::TcpStream;
 use tokio::sync::{OnceCell, RwLock};
 use tokio::time::{Duration, interval};
 
@@ -61,8 +58,6 @@ impl Upstream {
 
 #[derive(thiserror::Error, Debug)]
 pub enum TryCheckError {
-    #[error("io")]
-    IO(#[from] std::io::Error),
     #[error("hyper")]
     Hyper(#[from] hyper::Error),
     #[error("http")]
@@ -72,22 +67,14 @@ pub enum TryCheckError {
     #[error("uri")]
     URI(#[from] http::uri::InvalidUri),
 
+    #[error("tcp sender")]
+    TCPSender(#[from] rinha_net::CreateTCPSenderError),
     #[error("invalid authority")]
     InvalidAuthority,
 }
 
 async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health), TryCheckError> {
-    let stream = TcpStream::connect(upstream.addr).await?;
-
-    let io = TokioIo::new(stream);
-    let (mut sender, conn) = http1::handshake(io).await?;
-
-    tokio::spawn(async move {
-        if let Err(err) = conn.await {
-            tracing::error!(?err, "try check");
-        }
-    });
-
+    let mut sender = rinha_net::create_tcp_socket_sender(upstream.addr).await?;
     let uri = format!("http://{}/payments/service-health", upstream.addr);
     let uri = Uri::from_str(uri.as_str())?;
     let authority = uri

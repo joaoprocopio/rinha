@@ -1,5 +1,3 @@
-- trocar hyper client por reqwest com connection pooling
-
 Looking at your Rust HTTP proxy/load balancer code, here are the key areas where you can improve performance and reduce P99 latency from 2ms to under 1ms:
 
 ## 1. **Remove Async Locks from Hot Path**
