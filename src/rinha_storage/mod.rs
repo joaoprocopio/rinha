@@ -1,4 +1,4 @@
-use crate::rinha_balancer::UpstreamType;
+use crate::rinha_ambulance::UpstreamType;
 use chrono::{DateTime, Utc};
 use std::{
     collections::{BTreeMap, HashMap},

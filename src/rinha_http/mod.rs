@@ -1,5 +1,5 @@
 use crate::{
-    rinha_balancer::UpstreamType,
+    rinha_ambulance::UpstreamType,
     rinha_chan,
     rinha_core::Result,
     rinha_domain::{Payment, TargetCounter},

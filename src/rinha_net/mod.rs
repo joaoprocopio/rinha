@@ -2,14 +2,13 @@ use crate::{rinha_core::Result, rinha_http};
 use http_body_util::combinators::BoxBody;
 use hyper::{
     Method, Request, Response,
-    body::{Bytes, Incoming},
-    server::conn::http1,
-    service::service_fn,
+    body::{Body, Bytes, Incoming},
+    client, server, service,
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
 use socket2::{Domain, Protocol, SockAddr, Socket, TcpKeepalive, Type};
-use std::{convert::Infallible, net::SocketAddr, time::Duration};
-use tokio::net::{TcpListener, ToSocketAddrs, lookup_host};
+use std::{convert::Infallible, error::Error as StdError, net::SocketAddr, time::Duration};
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs, lookup_host};
 
 pub const JSON_CONTENT_TYPE: &'static str = "application/json";
 
@@ -43,15 +42,39 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
     Ok(socket)
 }
 
+pub async fn create_tcp_socket_sender<B>(
+    addr: SocketAddr,
+) -> Result<client::conn::http1::SendRequest<B>>
+where
+    B: Body + 'static + Send,
+    B::Data: Send,
+    B::Error: Into<Box<dyn StdError + Send + Sync>>,
+{
+    let stream = TcpStream::connect(addr).await?;
+    stream.set_nodelay(true)?;
+    stream.set_ttl(128)?;
+
+    let io = TokioIo::new(stream);
+    let (sender, conn) = client::conn::http1::handshake::<TokioIo<TcpStream>, B>(io).await?;
+
+    tokio::spawn(async move {
+        if let Err(err) = conn.await {
+            tracing::error!(?err);
+        }
+    });
+
+    Ok(sender)
+}
+
 pub async fn accept_loop(tcp_listener: TcpListener) -> Result<()> {
-    let mut http = http1::Builder::new();
+    let mut http = server::conn::http1::Builder::new();
 
     http.writev(true);
     http.timer(TokioTimer::new());
     http.pipeline_flush(true);
     http.half_close(false);
 
-    let service = service_fn(router);
+    let service = service::service_fn(router);
 
     loop {
         let (stream, _) = tcp_listener.accept().await?;

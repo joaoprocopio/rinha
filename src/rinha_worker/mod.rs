@@ -1,43 +1,29 @@
 use crate::{
-    rinha_balancer::{self, UpstreamType},
-    rinha_chan,
+    rinha_ambulance, rinha_chan,
     rinha_core::Result,
     rinha_domain::Payment,
-    rinha_net::JSON_CONTENT_TYPE,
+    rinha_net::{self, JSON_CONTENT_TYPE},
     rinha_storage,
 };
 use http_body_util::{BodyExt, Full};
-use hyper::{Method, Request, Uri, body::Bytes, client::conn::http1, header};
-use hyper_util::rt::TokioIo;
+use hyper::{Method, Request, Uri, body::Bytes, header};
 use std::str::FromStr;
-use tokio::net::TcpStream;
 
 async fn process_payment(payment: Payment) -> Result<()> {
-    let upstream = rinha_balancer::select()
+    let upstream = rinha_ambulance::select()
         .await
         .ok_or_else(|| "Failed to get healthy upstream")?;
     let upstream_type = upstream
         .ext
-        .get::<UpstreamType>()
+        .get::<rinha_ambulance::UpstreamType>()
         .ok_or_else(|| "No enum field is found")?;
 
-    let stream = TcpStream::connect(upstream.addr).await?;
-
-    let io = TokioIo::new(stream);
-    let (mut sender, conn) = http1::handshake(io).await?;
-
-    tokio::spawn(async move {
-        if let Err(err) = conn.await {
-            tracing::error!(?err);
-        }
-    });
-
+    let mut sender = rinha_net::create_tcp_socket_sender(upstream.addr).await?;
     let uri = format!("http://{}/payments", upstream.addr);
     let uri = Uri::from_str(uri.as_str())?;
     let authority = uri.authority().ok_or_else(|| "Unable to get authority")?;
 
     let payment_ser = serde_json::to_string(&payment)?;
-
     let req = Request::builder()
         .method(Method::POST)
         .header(header::HOST, authority.as_str())
