@@ -26,9 +26,20 @@ pub enum PaymentsError {
 
 pub async fn payments(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, PaymentsError> {
     let body = req.into_body().collect().await?.to_bytes();
-    let payment = serde_json::from_slice::<Payment>(&body)?;
-    let sender = rinha_chan::get_sender();
-    sender.send(payment).await?;
+
+    tokio::spawn(async move {
+        let Ok(payment) = serde_json::from_slice::<Payment>(&body) else {
+            tracing::error!("failed while parsing body");
+            return;
+        };
+
+        let sender = rinha_chan::get_sender();
+
+        if let Err(err) = sender.send(payment).await {
+            tracing::error!(?err, "failed while sending to channel");
+            return;
+        };
+    });
 
     Ok(Response::builder()
         .status(StatusCode::OK)
