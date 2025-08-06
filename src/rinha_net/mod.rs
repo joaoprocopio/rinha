@@ -141,12 +141,22 @@ pub async fn accept_loop(tcp_listener: TcpListener) -> Result<(), AcceptLoopErro
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum RouterError {
+    #[error("payments")]
+    Payments(#[from] rinha_http::PaymentsError),
+    #[error("payments summary")]
+    PaymentsSummary(#[from] rinha_http::PaymentsSummaryError),
+    #[error("not found")]
+    NotFound(#[from] rinha_http::NotFoundError),
+}
+
 pub async fn router(
     req: Request<Incoming>,
-) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
+) -> Result<Response<BoxBody<Bytes, Infallible>>, RouterError> {
     match (req.method(), req.uri().path()) {
-        (&Method::POST, "/payments") => rinha_http::payments(req).await,
-        (&Method::GET, "/payments-summary") => rinha_http::payments_summary(req).await,
-        _ => rinha_http::not_found_error(),
+        (&Method::POST, "/payments") => Ok(rinha_http::payments(req).await?),
+        (&Method::GET, "/payments-summary") => Ok(rinha_http::payments_summary(req).await?),
+        _ => Ok(rinha_http::not_found().await?),
     }
 }

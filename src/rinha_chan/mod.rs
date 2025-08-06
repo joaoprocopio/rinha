@@ -2,6 +2,7 @@ use crate::rinha_domain::Payment;
 use std::sync::{Arc, LazyLock};
 use tokio::sync::{Mutex, mpsc};
 
+pub type PaymentSendError = mpsc::error::SendError<Payment>;
 pub type PaymentReceiver = mpsc::UnboundedReceiver<Payment>;
 pub type PaymentSender = mpsc::UnboundedSender<Payment>;
 

@@ -13,7 +13,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 use tokio::net::TcpStream;
-use tokio::sync::{OnceCell, RwLock, SetError};
+use tokio::sync::{OnceCell, RwLock};
 use tokio::time::{Duration, interval};
 
 type HealthMap = HashMap<u64, bool>;
@@ -168,7 +168,7 @@ pub enum BootstrapError {
     #[error("sockaddr")]
     SockAddr(#[from] rinha_net::ResolveSocketAddrError),
     #[error("set error")]
-    SetError(#[from] SetError<Arc<Upstream>>),
+    SetError(#[from] tokio::sync::SetError<Arc<Upstream>>),
 }
 
 pub async fn bootstrap() -> Result<(), BootstrapError> {
