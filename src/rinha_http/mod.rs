@@ -1,5 +1,4 @@
 use crate::{
-    rinha_ambulance::UpstreamType,
     rinha_chan,
     rinha_domain::{Payment, TargetCounter, dt_to_i64},
     rinha_net::JSON_CONTENT_TYPE,
@@ -53,8 +52,6 @@ pub enum PaymentsSummaryError {
 
     #[error("infallible")]
     Infallible,
-    #[error("storage failed")]
-    StorageFailed,
 }
 
 pub async fn payments_summary(
@@ -80,20 +77,17 @@ pub async fn payments_summary(
         }
     };
 
-    let mut target_counter = TargetCounter::default();
-
-    let storage = rinha_storage::get_storage();
-    let storage = storage.read().await;
-
-    let default_storage = storage
-        .get(&UpstreamType::Default)
-        .ok_or_else(|| PaymentsSummaryError::StorageFailed)?;
-    let fallback_storage = storage
-        .get(&UpstreamType::Fallback)
-        .ok_or_else(|| PaymentsSummaryError::StorageFailed)?;
+    let (default_storage, fallback_storage) = (
+        rinha_storage::get_default_storage(),
+        rinha_storage::get_fallback_storage(),
+    );
+    let (default_storage, fallback_storage) =
+        tokio::join!(default_storage.read(), fallback_storage.read());
 
     let from = dt_to_i64(from);
     let to = dt_to_i64(to);
+
+    let mut target_counter = TargetCounter::default();
 
     for (_, amount) in default_storage.range(from..=to) {
         target_counter.default.requests += 1;

@@ -1,5 +1,5 @@
 use crate::{
-    rinha_ambulance::{self, Upstream},
+    rinha_ambulance::{self, Upstream, UpstreamType},
     rinha_chan,
     rinha_domain::{Payment, dt_to_i64},
     rinha_net::{self, JSON_CONTENT_TYPE},
@@ -25,8 +25,6 @@ pub enum PaymentError {
 
     #[error("no upstream type ext")]
     NoUpstreamTypeExt,
-    #[error("unstored upstream type")]
-    UnstoredUpstreamType,
     #[error("request failed")]
     ServerFailed,
     #[error("invalid authority")]
@@ -58,11 +56,12 @@ async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(
     let status = res.status();
 
     if status.is_success() {
-        let storage = rinha_storage::get_storage();
+        let storage = match upstream_type {
+            UpstreamType::Default => rinha_storage::get_default_storage(),
+            UpstreamType::Fallback => rinha_storage::get_fallback_storage(),
+        };
+
         let mut storage = storage.write().await;
-        let storage = storage
-            .get_mut(&upstream_type)
-            .ok_or_else(|| PaymentError::UnstoredUpstreamType)?;
         storage.insert(dt_to_i64(payment.requested_at), payment.amount);
     }
 

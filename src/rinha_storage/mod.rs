@@ -1,27 +1,25 @@
-use crate::rinha_ambulance::UpstreamType;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     sync::{Arc, LazyLock},
 };
 use tokio::sync::RwLock;
 
-type Storage = HashMap<UpstreamType, BTreeMap<i64, f64>>;
+type Storage = BTreeMap<i64, f64>;
 
-static STORAGE: LazyLock<Arc<RwLock<Storage>>> = LazyLock::new(|| {
-    let upstreams = [UpstreamType::Default, UpstreamType::Fallback];
-    let mut hash_map: Storage = HashMap::with_capacity(upstreams.len());
-
-    for upstream in upstreams {
-        hash_map.insert(upstream, BTreeMap::new());
-    }
-
-    Arc::new(RwLock::new(hash_map))
-});
+static DEFAULT_STORAGE: LazyLock<Arc<RwLock<Storage>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(Storage::new())));
+static FALLBACK_STORAGE: LazyLock<Arc<RwLock<Storage>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(Storage::new())));
 
 pub fn bootstrap() {
-    LazyLock::force(&STORAGE);
+    LazyLock::force(&DEFAULT_STORAGE);
+    LazyLock::force(&FALLBACK_STORAGE);
 }
 
-pub fn get_storage() -> Arc<RwLock<Storage>> {
-    STORAGE.clone()
+pub fn get_default_storage() -> Arc<RwLock<Storage>> {
+    DEFAULT_STORAGE.clone()
+}
+
+pub fn get_fallback_storage() -> Arc<RwLock<Storage>> {
+    FALLBACK_STORAGE.clone()
 }
