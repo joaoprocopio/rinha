@@ -21,3 +21,6 @@ target/
 # flamegraph
 flamegraph.svg
 perf.data
+
+# logs
+*.logs
