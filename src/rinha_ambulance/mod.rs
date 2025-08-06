@@ -1,4 +1,5 @@
 use crate::rinha_domain::Health;
+use crate::rinha_net;
 use crate::{rinha_conf, rinha_net::resolve_socket_addr};
 use derivative::Derivative;
 use http::{Extensions, Method, Request, Uri, header};
@@ -12,7 +13,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 use tokio::net::TcpStream;
-use tokio::sync::{OnceCell, RwLock};
+use tokio::sync::{OnceCell, RwLock, SetError};
 use tokio::time::{Duration, interval};
 
 type HealthMap = HashMap<u64, bool>;
@@ -58,7 +59,24 @@ impl Upstream {
     }
 }
 
-async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health)> {
+#[derive(thiserror::Error, Debug)]
+pub enum TryCheckError {
+    #[error("io")]
+    IO(#[from] std::io::Error),
+    #[error("hyper")]
+    Hyper(#[from] hyper::Error),
+    #[error("http")]
+    HTTP(#[from] http::Error),
+    #[error("serde")]
+    Serde(#[from] serde_json::Error),
+    #[error("uri")]
+    URI(#[from] http::uri::InvalidUri),
+
+    #[error("invalid authority")]
+    InvalidAuthority,
+}
+
+async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health), TryCheckError> {
     let stream = TcpStream::connect(upstream.addr).await?;
 
     let io = TokioIo::new(stream);
@@ -72,7 +90,9 @@ async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health)> {
 
     let uri = format!("http://{}/payments/service-health", upstream.addr);
     let uri = Uri::from_str(uri.as_str())?;
-    let authority = uri.authority().ok_or_else(|| "Unable to get authority")?;
+    let authority = uri
+        .authority()
+        .ok_or_else(|| TryCheckError::InvalidAuthority)?;
 
     let req = Request::builder()
         .method(Method::GET)
@@ -87,9 +107,17 @@ async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health)> {
     Ok((upstream, health))
 }
 
-async fn check() -> Result<()> {
+#[derive(thiserror::Error, Debug)]
+pub enum CheckError {
+    #[error("upstream failed")]
+    UpstreamFailed,
+    #[error("trial")]
+    TrialError(#[from] TryCheckError),
+}
+
+async fn check() -> Result<(), CheckError> {
     let (default_upstream, fallback_upstream) =
-        get_upstreams().ok_or_else(|| "Failed to get upstreams")?;
+        get_upstreams().ok_or_else(|| CheckError::UpstreamFailed)?;
     let ((default_upstream, default_stats), (fallback_upstream, fallback_stats)) = tokio::try_join!(
         try_check(default_upstream.as_ref()),  // default
         try_check(fallback_upstream.as_ref()), // fallback
@@ -135,7 +163,15 @@ pub fn get_upstreams() -> Option<(Arc<Upstream>, Arc<Upstream>)> {
     ))
 }
 
-pub async fn bootstrap() -> Result<()> {
+#[derive(thiserror::Error, Debug)]
+pub enum BootstrapError {
+    #[error("sockaddr")]
+    SockAddr(#[from] rinha_net::ResolveSocketAddrError),
+    #[error("set error")]
+    SetError(#[from] SetError<Arc<Upstream>>),
+}
+
+pub async fn bootstrap() -> Result<(), BootstrapError> {
     let (default_upstream, fallback_upstream) = tokio::try_join!(
         resolve_socket_addr(rinha_conf::RINHA_DEFAULT_UPSTREAM_ADDR.as_str()),
         resolve_socket_addr(rinha_conf::RINHA_FALLBACK_UPSTREAM_ADDR.as_str()),
@@ -155,7 +191,7 @@ pub async fn bootstrap() -> Result<()> {
     Ok(())
 }
 
-pub async fn task() -> Result<()> {
+pub async fn task() {
     let mut ticker = interval(Duration::from_secs(5));
 
     loop {

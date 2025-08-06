@@ -84,7 +84,7 @@ fn set_sock_opt_conf(socket: &Socket) -> Result<(), std::io::Error> {
 pub enum CreateTCPSenderError {
     #[error("io")]
     IO(#[from] std::io::Error),
-    #[error("error")]
+    #[error("hyper")]
     Hyper(#[from] hyper::Error),
 }
 
