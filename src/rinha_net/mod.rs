@@ -11,6 +11,7 @@ use std::{convert::Infallible, error::Error as StdError, net::SocketAddr, time::
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs, lookup_host};
 
 pub const JSON_CONTENT_TYPE: &'static str = "application/json";
+const BACKLOCK_BUFFER_SIZE: i32 = 4096;
 
 pub async fn resolve_socket_addr<T: ToSocketAddrs>(addr: T) -> Result<SocketAddr> {
     let mut addrs = lookup_host(addr).await?;
@@ -24,11 +25,19 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
         SocketAddr::V4(_) => Domain::IPV4,
         SocketAddr::V6(_) => Domain::IPV6,
     };
-    let addr = SockAddr::from(addr);
     let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
-    let backlog = 4096;
+    set_sock_opt_conf(&socket)?;
 
-    let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(75));
+    let addr = SockAddr::from(addr);
+    socket.bind(&addr)?;
+    socket.listen(BACKLOCK_BUFFER_SIZE)?;
+
+    Ok(socket)
+}
+
+fn set_sock_opt_conf(socket: &Socket) -> Result<()> {
+    let mut keepalive = TcpKeepalive::new();
+    keepalive = keepalive.with_time(Duration::from_secs(75));
 
     socket.set_tcp_keepalive(&keepalive)?;
     socket.set_tcp_quickack(true)?;
@@ -36,10 +45,9 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
     socket.set_reuse_port(true)?;
     socket.set_tcp_nodelay(true)?;
     socket.set_nonblocking(true)?;
-    socket.bind(&addr)?;
-    socket.listen(backlog)?;
+    socket.set_ttl_v4(128)?;
 
-    Ok(socket)
+    Ok(())
 }
 
 pub async fn create_tcp_socket_sender<B>(
@@ -51,8 +59,8 @@ where
     B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
     let stream = TcpStream::connect(addr).await?;
-    stream.set_nodelay(true)?;
-    stream.set_ttl(128)?;
+    let socket = socket2::SockRef::from(&stream);
+    set_sock_opt_conf(&socket)?;
 
     let io = TokioIo::new(stream);
     let (sender, conn) = client::conn::http1::handshake::<TokioIo<TcpStream>, B>(io).await?;
