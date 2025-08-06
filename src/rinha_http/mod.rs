@@ -32,7 +32,7 @@ pub async fn payments(
     let body = req.collect().await?.aggregate();
     let payment: Payment = serde_json::from_reader(body.reader())?;
     let sender = rinha_chan::get_sender();
-    let _ = sender.send(payment)?;
+    let _ = sender.send(payment).await?;
 
     Ok(Response::builder()
         .status(StatusCode::OK)
