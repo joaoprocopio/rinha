@@ -29,7 +29,7 @@ enum MainError {
     CreateSocket(#[from] rinha_net::CreateTCPSocketError),
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), MainError> {
     tracing_subscriber::fmt().init();
 
