@@ -133,20 +133,20 @@ async fn check() -> Result<(), CheckError> {
 }
 
 pub async fn select() -> Option<Arc<Upstream>> {
-    let upstreams = get_upstreams()?;
+    let (default_upstream, fallback_upstream) = get_upstreams()?;
     let health_map = get_health_map();
     let health_map = health_map.read().await;
 
     if *health_map
-        .get(&upstreams.0.hash_addr())
+        .get(&default_upstream.hash_addr())
         .unwrap_or_else(|| &false)
     {
-        return Some(upstreams.0);
+        return Some(default_upstream);
     } else if *health_map
-        .get(&upstreams.1.hash_addr())
+        .get(&fallback_upstream.hash_addr())
         .unwrap_or_else(|| &false)
     {
-        return Some(upstreams.1);
+        return Some(fallback_upstream);
     }
 
     None
