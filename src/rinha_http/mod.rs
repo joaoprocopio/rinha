@@ -1,7 +1,7 @@
 use crate::{
     rinha_ambulance::UpstreamType,
     rinha_chan,
-    rinha_domain::{Payment, TargetCounter},
+    rinha_domain::{Payment, TargetCounter, dt_to_i64},
     rinha_net::JSON_CONTENT_TYPE,
     rinha_storage,
 };
@@ -91,6 +91,9 @@ pub async fn payments_summary(
     let fallback_storage = storage
         .get(&UpstreamType::Fallback)
         .ok_or_else(|| PaymentsSummaryError::StorageFailed)?;
+
+    let from = dt_to_i64(from);
+    let to = dt_to_i64(to);
 
     for (_, amount) in default_storage.range(from..=to) {
         target_counter.default.requests += 1;

@@ -2,6 +2,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub fn dt_to_i64(dt: DateTime<Utc>) -> i64 {
+    dt.timestamp_micros()
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Payment {
     #[serde(rename = "correlationId")]

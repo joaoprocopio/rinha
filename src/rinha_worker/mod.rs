@@ -1,7 +1,7 @@
 use crate::{
     rinha_ambulance::{self, Upstream},
     rinha_chan,
-    rinha_domain::Payment,
+    rinha_domain::{Payment, dt_to_i64},
     rinha_net::{self, JSON_CONTENT_TYPE},
     rinha_storage,
 };
@@ -63,7 +63,7 @@ async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(
         let storage = storage
             .get_mut(&upstream_type)
             .ok_or_else(|| PaymentError::UnstoredUpstreamType)?;
-        storage.insert(payment.requested_at, payment.amount);
+        storage.insert(dt_to_i64(payment.requested_at), payment.amount);
     }
 
     if status.is_server_error() {

@@ -1,12 +1,11 @@
 use crate::rinha_ambulance::UpstreamType;
-use chrono::{DateTime, Utc};
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, LazyLock},
 };
 use tokio::sync::RwLock;
 
-type Storage = HashMap<UpstreamType, BTreeMap<DateTime<Utc>, f64>>;
+type Storage = HashMap<UpstreamType, BTreeMap<i64, f64>>;
 
 static STORAGE: LazyLock<Arc<RwLock<Storage>>> = LazyLock::new(|| {
     let upstreams = [UpstreamType::Default, UpstreamType::Fallback];
