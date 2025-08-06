@@ -17,3 +17,7 @@ target/
 
 # storage
 .storage
+
+# flamegraph
+flamegraph.svg
+perf.data

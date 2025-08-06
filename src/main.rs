@@ -1,3 +1,6 @@
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 use crate::rinha_core::Result;
 use tokio::net::TcpListener;
 
