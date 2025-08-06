@@ -81,13 +81,6 @@ pub async fn payments_summary(
         .map_err(|err| err.into())
 }
 
-pub fn ping() -> Result<Response<BoxBody<Bytes, Infallible>>> {
-    Response::builder()
-        .status(StatusCode::OK)
-        .body(Full::from("pong").boxed())
-        .map_err(|err| err.into())
-}
-
 pub fn not_found_error() -> Result<Response<BoxBody<Bytes, Infallible>>> {
     Response::builder()
         .status(StatusCode::NOT_FOUND)

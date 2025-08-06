@@ -59,7 +59,7 @@ impl Upstream {
     }
 }
 
-async fn try_check(upstream: &Upstream) -> Result<Health> {
+async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health)> {
     let stream = TcpStream::connect(upstream.addr).await?;
 
     let io = TokioIo::new(stream);
@@ -85,21 +85,22 @@ async fn try_check(upstream: &Upstream) -> Result<Health> {
     let body = res.collect().await?.aggregate();
     let health: Health = serde_json::from_reader(body.reader())?;
 
-    Ok(health)
+    Ok((upstream, health))
 }
 
 async fn check() -> Result<()> {
-    let upstreams = get_upstreams().ok_or_else(|| "Failed to get upstreams")?;
+    let (default_upstream, fallback_upstream) =
+        get_upstreams().ok_or_else(|| "Failed to get upstreams")?;
+    let ((default_upstream, default_stats), (fallback_upstream, fallback_stats)) = tokio::try_join!(
+        try_check(default_upstream.as_ref()),  // default
+        try_check(fallback_upstream.as_ref()), // fallback
+    )?;
+
     let health_map = get_health_map();
     let mut health_map = health_map.write().await;
 
-    let results = tokio::try_join!(
-        try_check(upstreams.0.as_ref()),
-        try_check(upstreams.1.as_ref())
-    )?;
-
-    health_map.insert(upstreams.0.hash_addr(), !results.0.failing);
-    health_map.insert(upstreams.1.hash_addr(), !results.1.failing);
+    health_map.insert(default_upstream.hash_addr(), !default_stats.failing);
+    health_map.insert(fallback_upstream.hash_addr(), !fallback_stats.failing);
 
     Ok(())
 }

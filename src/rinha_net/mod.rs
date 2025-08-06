@@ -46,11 +46,11 @@ pub async fn accept_loop(tcp_listener: TcpListener) -> Result<()> {
     let service = service_fn(router);
 
     loop {
-        let (tcp_stream, _) = tcp_listener.accept().await?;
+        let (stream, _) = tcp_listener.accept().await?;
         let http = http.clone();
 
         tokio::spawn(async move {
-            let io = TokioIo::new(tcp_stream);
+            let io = TokioIo::new(stream);
             if let Err(err) = http.serve_connection(io, service).await {
                 tracing::error!(?err);
             };
@@ -62,7 +62,6 @@ pub async fn router(req: Request<Incoming>) -> Result<Response<BoxBody<Bytes, In
     match (req.method(), req.uri().path()) {
         (&Method::POST, "/payments") => rinha_http::payments(req).await,
         (&Method::GET, "/payments-summary") => rinha_http::payments_summary(req).await,
-        (&Method::GET, "/ping") => rinha_http::ping(),
         _ => rinha_http::not_found_error(),
     }
 }
