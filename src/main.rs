@@ -19,7 +19,7 @@ enum MainError {
     #[error("io")]
     IO(#[from] std::io::Error),
 
-    #[error("accept loop ")]
+    #[error("accept loop")]
     AcceptLoop(#[from] rinha_net::AcceptLoopError),
     #[error("ambulance")]
     Ambulance(#[from] rinha_ambulance::BootstrapError),
