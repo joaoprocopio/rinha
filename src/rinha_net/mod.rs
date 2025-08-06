@@ -6,9 +6,9 @@ use hyper::{
     server::conn::http1,
     service::service_fn,
 };
-use hyper_util::rt::TokioIo;
-use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::{convert::Infallible, net::SocketAddr};
+use hyper_util::rt::{TokioIo, TokioTimer};
+use socket2::{Domain, Protocol, SockAddr, Socket, TcpKeepalive, Type};
+use std::{convert::Infallible, net::SocketAddr, time::Duration};
 use tokio::net::{TcpListener, ToSocketAddrs, lookup_host};
 
 pub const JSON_CONTENT_TYPE: &'static str = "application/json";
@@ -29,6 +29,9 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
     let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
     let backlog = 4096;
 
+    let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(75));
+
+    socket.set_tcp_keepalive(&keepalive)?;
     socket.set_reuse_address(true)?;
     socket.set_reuse_port(true)?;
     socket.set_tcp_nodelay(true)?;
@@ -41,7 +44,11 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket> {
 
 pub async fn accept_loop(tcp_listener: TcpListener) -> Result<()> {
     let mut http = http1::Builder::new();
+
+    http.writev(true);
+    http.timer(TokioTimer::new());
     http.pipeline_flush(true);
+    http.half_close(false);
 
     let service = service_fn(router);
 

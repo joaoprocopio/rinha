@@ -14,7 +14,7 @@ mod rinha_net;
 mod rinha_storage;
 mod rinha_worker;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt().with_thread_ids(true).init();
 
