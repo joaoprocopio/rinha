@@ -19,33 +19,23 @@ use tokio::{
     time::Duration,
 };
 
+pub const JSON_CONTENT_TYPE: &'static str = "application/json";
+
 static CLIENT: LazyLock<Arc<Client<HttpConnector, Full<Bytes>>>> = LazyLock::new(|| {
     let mut client = Client::builder(TokioExecutor::new());
     client.pool_timer(TokioTimer::new());
-    client.pool_idle_timeout(KEEPALIVE_TIME);
+    client.pool_idle_timeout(Duration::from_secs(90));
+    client.retry_canceled_requests(false);
 
     let mut conn = HttpConnector::new();
-    conn.set_keepalive(Some(KEEPALIVE_TIME));
-    conn.set_keepalive_interval(Some(KEEPALIVE_INTERVAL));
-    conn.set_tcp_user_timeout(Some(USER_TIMEOUT));
-    conn.set_nodelay(NODELAY);
+    conn.set_keepalive(Some(Duration::from_secs(90)));
+    conn.set_keepalive_interval(Some(Duration::from_secs(30)));
+    conn.set_tcp_user_timeout(Some(Duration::from_secs(5)));
+    conn.set_nodelay(true);
     conn.set_reuse_address(true);
 
     Arc::new(client.build(conn))
 });
-
-pub const JSON_CONTENT_TYPE: &'static str = "application/json";
-
-const TTL: u32 = 128;
-const NODELAY: bool = true;
-const IPTOS_LOWDELAY: u32 = (0u8 | 0x10) as u32;
-const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
-const KEEPALIVE_TIME: Duration = Duration::from_secs(90);
-const BACKLOCK_BUFFER_SIZE: i32 = 8 * 1024;
-const SEND_BUFFER_SIZE: usize = 64 * 1024;
-const RECV_BUFFER_SIZE: usize = 64 * 1024;
-const USER_TIMEOUT: Duration = Duration::from_secs(1);
-const LINGER: Duration = Duration::ZERO;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ResolveSocketAddrError {
@@ -82,28 +72,28 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket, CreateTCPSocketErro
 
     let addr = SockAddr::from(addr);
     socket.bind(&addr)?;
-    socket.listen(BACKLOCK_BUFFER_SIZE)?;
+    socket.listen(8 * 1024)?;
 
     Ok(socket)
 }
 
 fn set_sock_opt_conf(socket: &Socket) -> Result<(), std::io::Error> {
     let mut keepalive = TcpKeepalive::new();
-    keepalive = keepalive.with_time(KEEPALIVE_TIME);
-    keepalive = keepalive.with_interval(KEEPALIVE_INTERVAL);
+    keepalive = keepalive.with_time(Duration::from_secs(90));
+    keepalive = keepalive.with_interval(Duration::from_secs(30));
 
     socket.set_tcp_keepalive(&keepalive)?;
     socket.set_tcp_quickack(true)?;
     socket.set_reuse_address(true)?;
     socket.set_reuse_port(true)?;
-    socket.set_tcp_nodelay(NODELAY)?;
     socket.set_nonblocking(true)?;
-    socket.set_ttl_v4(TTL)?;
-    socket.set_tos_v4(IPTOS_LOWDELAY)?;
-    socket.set_send_buffer_size(SEND_BUFFER_SIZE)?;
-    socket.set_recv_buffer_size(RECV_BUFFER_SIZE)?;
-    socket.set_tcp_user_timeout(Some(USER_TIMEOUT))?;
-    socket.set_linger(Some(LINGER))?;
+    socket.set_tcp_nodelay(true)?;
+    socket.set_ttl_v4(128)?;
+    socket.set_tos_v4((0u8 | 0x10) as u32)?;
+    socket.set_send_buffer_size(96 * 1024)?;
+    socket.set_recv_buffer_size(96 * 1024)?;
+    socket.set_tcp_user_timeout(Some(Duration::from_secs(5)))?;
+    socket.set_linger(Some(Duration::ZERO))?;
 
     Ok(())
 }

@@ -25,9 +25,15 @@ pub enum PaymentsError {
 }
 
 pub async fn payments(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, PaymentsError> {
-    let body = req.into_body().collect().await?.to_bytes();
-
     tokio::spawn(async move {
+        let body = match req.into_body().collect().await {
+            Ok(body) => body.to_bytes(),
+            Err(_) => {
+                tracing::error!("failed while reading body");
+                return;
+            }
+        };
+
         let Ok(payment) = serde_json::from_slice::<Payment>(&body) else {
             tracing::error!("failed while parsing body");
             return;
