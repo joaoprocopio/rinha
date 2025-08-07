@@ -6,8 +6,7 @@ use crate::{
     rinha_storage,
 };
 use http_body_util::Full;
-use hyper::{Method, Request, Uri, body::Bytes, header};
-use std::str::FromStr;
+use hyper::{Method, Request, body::Bytes, header};
 use tokio::time::{Duration, sleep};
 
 #[derive(thiserror::Error, Debug)]
@@ -25,8 +24,6 @@ pub enum PaymentError {
     NoUpstreamTypeExt,
     #[error("request failed")]
     ServerFailed,
-    #[error("invalid authority")]
-    InvalidAuthority,
 }
 
 async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(), PaymentError> {
@@ -36,21 +33,13 @@ async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(
         .ok_or_else(|| PaymentError::NoUpstreamTypeExt)?;
 
     let client = rinha_net::get_client();
-
     let uri = format!("http://{}/payments", upstream.addr);
-    let uri = Uri::from_str(uri.as_str())?;
-    let authority = uri
-        .authority()
-        .ok_or_else(|| PaymentError::InvalidAuthority)?;
-
     let payment_ser = serde_json::to_string(&payment)?;
     let req = Request::builder()
         .method(Method::POST)
-        .header(header::HOST, authority.as_str())
         .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
         .uri(uri)
         .body(Full::<Bytes>::from(payment_ser))?;
-
     let res = client.request(req).await?;
     let status = res.status();
 
@@ -59,9 +48,10 @@ async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(
             UpstreamType::Default => rinha_storage::get_default_storage(),
             UpstreamType::Fallback => rinha_storage::get_fallback_storage(),
         };
-
         let mut storage = storage.write().await;
         storage.insert(dt_to_i64(payment.requested_at), payment.amount);
+
+        return Ok(());
     }
 
     if status.is_server_error() {
@@ -108,6 +98,7 @@ async fn process_payment(payment: &Payment) {
     }
 }
 
+#[inline]
 fn backoff(base: Duration, attempt: u32, max: Duration) -> Duration {
     let exp = 1 << attempt;
     let delay = base * exp;

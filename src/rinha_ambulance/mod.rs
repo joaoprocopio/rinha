@@ -2,13 +2,12 @@ use crate::rinha_domain::Health;
 use crate::rinha_net;
 use crate::{rinha_conf, rinha_net::resolve_socket_addr};
 use derivative::Derivative;
-use http::{Extensions, Method, Request, Uri, header};
+use http::{Extensions, Method, Request};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 use tokio::sync::{OnceCell, RwLock};
 use tokio::time::{Duration, interval};
@@ -69,8 +68,6 @@ pub enum TryCheckError {
     #[error("client")]
     Client(#[from] hyper_util::client::legacy::Error),
 
-    #[error("invalid authority")]
-    InvalidAuthority,
     #[error("never")]
     Infallible(#[from] std::convert::Infallible),
 }
@@ -78,20 +75,12 @@ pub enum TryCheckError {
 async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health), TryCheckError> {
     let client = rinha_net::get_client();
     let uri = format!("http://{}/payments/service-health", upstream.addr);
-    let uri = Uri::from_str(uri.as_str())?;
-    let authority = uri
-        .authority()
-        .ok_or_else(|| TryCheckError::InvalidAuthority)?;
-
     let req = Request::builder()
         .method(Method::GET)
-        .header(header::HOST, authority.as_str())
         .uri(uri)
         .body(Full::new(Bytes::new()))?;
-
     let res = client.request(req).await?;
     let body = res.into_body().collect().await?.to_bytes();
-
     let health: Health = serde_json::from_slice(&body)?;
 
     Ok((upstream, health))

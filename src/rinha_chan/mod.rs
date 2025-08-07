@@ -3,10 +3,11 @@ use std::sync::LazyLock;
 use tokio::sync::{Mutex, mpsc};
 
 pub type PaymentSendError = mpsc::error::SendError<Payment>;
+pub type PaymentTrySendError = mpsc::error::TrySendError<Payment>;
 pub type PaymentReceiver = mpsc::Receiver<Payment>;
 pub type PaymentSender = mpsc::Sender<Payment>;
 
-const CHANNEL_BUFFER: usize = size_of::<Payment>() * (8 << 9) as usize;
+const CHANNEL_BUFFER: usize = 256 << 8;
 
 static CHANNEL: LazyLock<(PaymentSender, Mutex<PaymentReceiver>)> = LazyLock::new(|| {
     let channel = mpsc::channel::<Payment>(CHANNEL_BUFFER);

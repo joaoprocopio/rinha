@@ -24,15 +24,19 @@ pub const JSON_CONTENT_TYPE: &'static str = "application/json";
 static CLIENT: LazyLock<Arc<Client<HttpConnector, Full<Bytes>>>> = LazyLock::new(|| {
     let mut client = Client::builder(TokioExecutor::new());
     client.pool_timer(TokioTimer::new());
-    client.pool_idle_timeout(Duration::from_secs(90));
+    client.pool_idle_timeout(Duration::from_secs(30));
+    client.pool_max_idle_per_host(8);
     client.retry_canceled_requests(false);
+    client.set_host(true);
 
     let mut conn = HttpConnector::new();
-    conn.set_keepalive(Some(Duration::from_secs(90)));
-    conn.set_keepalive_interval(Some(Duration::from_secs(30)));
-    conn.set_tcp_user_timeout(Some(Duration::from_secs(5)));
+    conn.set_keepalive(Some(Duration::from_secs(30)));
+    conn.set_keepalive_interval(Some(Duration::from_secs(10)));
+    conn.set_tcp_user_timeout(Some(Duration::from_secs(3)));
     conn.set_nodelay(true);
     conn.set_reuse_address(true);
+    conn.set_connect_timeout(Some(Duration::from_millis(500)));
+    conn.set_happy_eyeballs_timeout(Some(Duration::from_millis(100)));
 
     Arc::new(client.build(conn))
 });
@@ -79,8 +83,8 @@ pub fn create_tcp_socket(addr: SocketAddr) -> Result<Socket, CreateTCPSocketErro
 
 fn set_sock_opt_conf(socket: &Socket) -> Result<(), std::io::Error> {
     let mut keepalive = TcpKeepalive::new();
-    keepalive = keepalive.with_time(Duration::from_secs(90));
-    keepalive = keepalive.with_interval(Duration::from_secs(30));
+    keepalive = keepalive.with_time(Duration::from_secs(30));
+    keepalive = keepalive.with_interval(Duration::from_secs(10));
 
     socket.set_tcp_keepalive(&keepalive)?;
     socket.set_tcp_quickack(true)?;
@@ -88,11 +92,14 @@ fn set_sock_opt_conf(socket: &Socket) -> Result<(), std::io::Error> {
     socket.set_reuse_port(true)?;
     socket.set_nonblocking(true)?;
     socket.set_tcp_nodelay(true)?;
-    socket.set_ttl_v4(128)?;
-    socket.set_tos_v4((0u8 | 0x10) as u32)?;
-    socket.set_send_buffer_size(96 * 1024)?;
-    socket.set_recv_buffer_size(96 * 1024)?;
-    socket.set_tcp_user_timeout(Some(Duration::from_secs(5)))?;
+    socket.set_ttl_v4(64)?;
+
+    socket.set_tos_v4(0x10)?;
+
+    socket.set_send_buffer_size(32 * 1024)?;
+    socket.set_recv_buffer_size(32 * 1024)?;
+
+    socket.set_tcp_user_timeout(Some(Duration::from_secs(3)))?;
     socket.set_linger(Some(Duration::ZERO))?;
 
     Ok(())
@@ -111,17 +118,22 @@ pub enum AcceptLoopError {
 pub async fn accept_loop(tcp_listener: TcpListener) -> Result<(), AcceptLoopError> {
     let mut http = server::conn::http1::Builder::new();
 
-    http.writev(true);
+    http.writev(false);
     http.timer(TokioTimer::new());
-    http.pipeline_flush(true);
-    http.half_close(false);
-    http.keep_alive(true);
+    http.pipeline_flush(false);
+    http.half_close(true);
+    http.keep_alive(false);
+    http.header_read_timeout(Duration::from_millis(100));
+    http.max_buf_size(16 * 1024);
 
     let service = service::service_fn(router);
 
     loop {
-        let (stream, _) = tcp_listener.accept().await?;
         let http = http.clone();
+        let (stream, _) = tcp_listener.accept().await?;
+        let socket = socket2::SockRef::from(&stream);
+        let _ = socket.set_tcp_nodelay(true);
+        let _ = socket.set_tcp_quickack(true);
 
         tokio::spawn(async move {
             let io = TokioIo::new(stream);

@@ -22,30 +22,15 @@ pub enum PaymentsError {
     HTTP(#[from] http::Error),
     #[error("send")]
     Send(#[from] rinha_chan::PaymentSendError),
+    #[error("try send")]
+    TrySend(#[from] rinha_chan::PaymentTrySendError),
 }
 
 pub async fn payments(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, PaymentsError> {
-    tokio::spawn(async move {
-        let body = match req.into_body().collect().await {
-            Ok(body) => body.to_bytes(),
-            Err(_) => {
-                tracing::error!("failed while reading body");
-                return;
-            }
-        };
-
-        let Ok(payment) = serde_json::from_slice::<Payment>(&body) else {
-            tracing::error!("failed while parsing body");
-            return;
-        };
-
-        let sender = rinha_chan::get_sender();
-
-        if let Err(err) = sender.send(payment).await {
-            tracing::error!(?err, "failed while sending to channel");
-            return;
-        };
-    });
+    let body = req.into_body().collect().await?.to_bytes();
+    let payment = serde_json::from_slice::<Payment>(&body)?;
+    let sender = rinha_chan::get_sender();
+    sender.try_send(payment)?;
 
     Ok(Response::builder()
         .status(StatusCode::OK)
