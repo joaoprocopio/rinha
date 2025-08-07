@@ -105,15 +105,26 @@ fn backoff(base: Duration, attempt: u32, max: Duration) -> Duration {
     std::cmp::min(delay, max)
 }
 
-pub async fn task() {
-    let receiver = rinha_chan::get_receiver();
-    let mut receiver = receiver.lock().await;
+async fn workers() {
+    let channels = rinha_chan::get_channels();
 
-    loop {
-        if let Some(payment) = receiver.recv().await {
-            tokio::spawn(async move {
-                process_payment(&payment).await;
-            });
-        }
+    for (_, receiver) in channels {
+        tokio::spawn({
+            let receiver = receiver;
+
+            async move {
+                let mut receiver = receiver.lock().await;
+
+                loop {
+                    if let Some(payment) = receiver.recv().await {
+                        process_payment(&payment).await;
+                    }
+                }
+            }
+        });
     }
+}
+
+pub async fn task() {
+    workers().await;
 }
