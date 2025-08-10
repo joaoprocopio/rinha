@@ -10,10 +10,7 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo, TokioTimer},
 };
 use socket2::{Domain, Protocol, SockAddr, Socket, TcpKeepalive, Type};
-use std::{
-    net::SocketAddr,
-    sync::{Arc, LazyLock},
-};
+use std::{net::SocketAddr, sync::LazyLock};
 use tokio::{
     net::{TcpListener, ToSocketAddrs, lookup_host},
     time::Duration,
@@ -21,13 +18,11 @@ use tokio::{
 
 pub const JSON_CONTENT_TYPE: &'static str = "application/json";
 
-static CLIENT: LazyLock<Arc<Client<HttpConnector, Full<Bytes>>>> = LazyLock::new(|| {
+static CLIENT: LazyLock<Client<HttpConnector, Full<Bytes>>> = LazyLock::new(|| {
     let mut client = Client::builder(TokioExecutor::new());
     client.pool_timer(TokioTimer::new());
     client.pool_idle_timeout(Duration::from_secs(30));
     client.pool_max_idle_per_host(8);
-    client.retry_canceled_requests(false);
-    client.set_host(true);
 
     let mut conn = HttpConnector::new();
     conn.set_keepalive(Some(Duration::from_secs(30)));
@@ -38,7 +33,7 @@ static CLIENT: LazyLock<Arc<Client<HttpConnector, Full<Bytes>>>> = LazyLock::new
     conn.set_connect_timeout(Some(Duration::from_millis(500)));
     conn.set_happy_eyeballs_timeout(Some(Duration::from_millis(100)));
 
-    Arc::new(client.build(conn))
+    client.build(conn)
 });
 
 #[derive(thiserror::Error, Debug)]
@@ -105,7 +100,7 @@ fn set_sock_opt_conf(socket: &Socket) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub fn get_client() -> Arc<Client<HttpConnector, Full<Bytes>>> {
+pub fn get_client() -> Client<HttpConnector, Full<Bytes>> {
     CLIENT.clone()
 }
 

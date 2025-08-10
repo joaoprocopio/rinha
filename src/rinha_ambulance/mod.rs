@@ -75,11 +75,14 @@ pub enum TryCheckError {
 async fn try_check(upstream: &Upstream) -> Result<(&Upstream, Health), TryCheckError> {
     let client = rinha_net::get_client();
     let uri = format!("http://{}/payments/service-health", upstream.addr);
-    let req = Request::builder()
-        .method(Method::GET)
-        .uri(uri)
-        .body(Full::new(Bytes::new()))?;
-    let res = client.request(req).await?;
+    let res = client
+        .request(
+            Request::builder()
+                .method(Method::GET)
+                .uri(uri)
+                .body(Full::new(Bytes::new()))?,
+        )
+        .await?;
     let body = res.into_body().collect().await?.to_bytes();
     let health: Health = serde_json::from_slice(&body)?;
 

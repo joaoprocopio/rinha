@@ -35,12 +35,15 @@ async fn try_process_payment(payment: &Payment, upstream: &Upstream) -> Result<(
     let client = rinha_net::get_client();
     let uri = format!("http://{}/payments", upstream.addr);
     let payment_ser = serde_json::to_string(&payment)?;
-    let req = Request::builder()
-        .method(Method::POST)
-        .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
-        .uri(uri)
-        .body(Full::<Bytes>::from(payment_ser))?;
-    let res = client.request(req).await?;
+    let res = client
+        .request(
+            Request::builder()
+                .method(Method::POST)
+                .header(header::CONTENT_TYPE, JSON_CONTENT_TYPE)
+                .uri(uri)
+                .body(Full::<Bytes>::from(payment_ser))?,
+        )
+        .await?;
     let status = res.status();
 
     if status.is_success() {
