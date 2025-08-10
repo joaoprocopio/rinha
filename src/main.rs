@@ -2,6 +2,7 @@
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 use tokio::net::TcpListener;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod rinha_ambulance;
 mod rinha_chan;
@@ -31,7 +32,10 @@ enum MainError {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), MainError> {
-    tracing_subscriber::fmt().init();
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_timer(tracing_subscriber::fmt::time::uptime()))
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     rinha_net::bootstrap();
     rinha_chan::boostrap();

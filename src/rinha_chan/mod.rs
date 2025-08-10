@@ -7,7 +7,7 @@ pub type PaymentTrySendError = mpsc::error::TrySendError<Payment>;
 pub type PaymentReceiver = mpsc::Receiver<Payment>;
 pub type PaymentSender = mpsc::Sender<Payment>;
 
-const CHANNEL_BUFFER: usize = 256 << 4;
+const CHANNEL_BUFFER: usize = 256 << 8;
 const CHANNEL_COUNT: usize = 5;
 
 static COUNTER: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
