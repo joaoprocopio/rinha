@@ -16,7 +16,7 @@ use tokio::{
     time::Duration,
 };
 
-pub const JSON_CONTENT_TYPE: &'static str = "application/json";
+pub const JSON_CONTENT_TYPE: &str = "application/json";
 
 static CLIENT: LazyLock<Client<HttpConnector, Full<Bytes>>> = LazyLock::new(|| {
     let mut client = Client::builder(TokioExecutor::new());

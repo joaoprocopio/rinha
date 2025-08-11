@@ -28,7 +28,7 @@ pub fn get_sender() -> PaymentSender {
     CHANNELS[idx].0.clone()
 }
 
-pub fn get_channels() -> &'static [(PaymentSender, Mutex<PaymentReceiver>); CHANNEL_COUNT] {
+pub fn get_channels<'a>() -> &'a [(PaymentSender, Mutex<PaymentReceiver>); CHANNEL_COUNT] {
     &CHANNELS
 }
 

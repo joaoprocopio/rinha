@@ -14,8 +14,8 @@ use tokio::time::{Duration, interval};
 
 type HealthMap = HashMap<u64, bool>;
 
-static DEFAULT_UPSTREAM: OnceCell<Arc<Upstream>> = OnceCell::const_new();
-static FALLBACK_UPSTREAM: OnceCell<Arc<Upstream>> = OnceCell::const_new();
+static DEFAULT_UPSTREAM: OnceCell<Upstream> = OnceCell::const_new();
+static FALLBACK_UPSTREAM: OnceCell<Upstream> = OnceCell::const_new();
 
 static HEALTH_MAP: LazyLock<Arc<RwLock<HealthMap>>> =
     LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
@@ -101,8 +101,8 @@ async fn check() -> Result<(), CheckError> {
     let (default_upstream, fallback_upstream) =
         get_upstreams().ok_or_else(|| CheckError::UpstreamFailed)?;
     let ((default_upstream, default_stats), (fallback_upstream, fallback_stats)) = tokio::try_join!(
-        try_check(default_upstream.as_ref()),  // default
-        try_check(fallback_upstream.as_ref()), // fallback
+        try_check(default_upstream),  // default
+        try_check(fallback_upstream), // fallback
     )?;
 
     let health_map = get_health_map();
@@ -114,7 +114,7 @@ async fn check() -> Result<(), CheckError> {
     Ok(())
 }
 
-pub async fn select() -> Option<Arc<Upstream>> {
+pub async fn select<'a>() -> Option<&'a Upstream> {
     let (default_upstream, fallback_upstream) = get_upstreams()?;
     let health_map = get_health_map();
     let health_map = health_map.read().await;
@@ -138,11 +138,8 @@ pub fn get_health_map() -> Arc<RwLock<HealthMap>> {
     HEALTH_MAP.clone()
 }
 
-pub fn get_upstreams() -> Option<(Arc<Upstream>, Arc<Upstream>)> {
-    Some((
-        DEFAULT_UPSTREAM.get()?.clone(),
-        FALLBACK_UPSTREAM.get()?.clone(),
-    ))
+pub fn get_upstreams<'a>() -> Option<(&'a Upstream, &'a Upstream)> {
+    Some((DEFAULT_UPSTREAM.get()?, FALLBACK_UPSTREAM.get()?))
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -150,7 +147,7 @@ pub enum BootstrapError {
     #[error("sockaddr")]
     SockAddr(#[from] rinha_net::ResolveSocketAddrError),
     #[error("set error")]
-    SetError(#[from] tokio::sync::SetError<Arc<Upstream>>),
+    SetError(#[from] tokio::sync::SetError<Upstream>),
 }
 
 pub async fn bootstrap() -> Result<(), BootstrapError> {
@@ -167,8 +164,8 @@ pub async fn bootstrap() -> Result<(), BootstrapError> {
     default_upstream.ext.insert(UpstreamType::Default);
     fallback_upstream.ext.insert(UpstreamType::Fallback);
 
-    DEFAULT_UPSTREAM.set(Arc::new(default_upstream))?;
-    FALLBACK_UPSTREAM.set(Arc::new(fallback_upstream))?;
+    DEFAULT_UPSTREAM.set(default_upstream)?;
+    FALLBACK_UPSTREAM.set(fallback_upstream)?;
 
     Ok(())
 }

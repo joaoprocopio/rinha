@@ -30,13 +30,7 @@ enum MainError {
     CreateSocket(#[from] rinha_net::CreateTCPSocketError),
 }
 
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<(), MainError> {
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_timer(tracing_subscriber::fmt::time::uptime()))
-        .with(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
-
+async fn run() -> Result<(), MainError> {
     rinha_net::bootstrap();
     rinha_chan::boostrap();
     rinha_conf::bootstrap();
@@ -58,5 +52,19 @@ async fn main() -> Result<(), MainError> {
     let tcp_listener = TcpListener::from_std(tcp_socket.into())?;
 
     let accept_loop = rinha_net::accept_loop(tcp_listener);
+
     Ok(tokio::spawn(accept_loop).await??)
+}
+
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_timer(tracing_subscriber::fmt::time::uptime()))
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
+    if let Err(err) = run().await {
+        tracing::error!(?err);
+        std::process::exit(1);
+    }
 }
