@@ -1,24 +1,23 @@
 use crate::rinha_domain::Health;
 use crate::rinha_net;
 use crate::{rinha_conf, rinha_net::resolve_socket_addr};
+use dashmap::DashMap;
 use derivative::Derivative;
 use http::{Extensions, Method, Request};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
-use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::net::SocketAddr;
 use std::sync::{Arc, LazyLock};
-use tokio::sync::{OnceCell, RwLock};
+use tokio::sync::OnceCell;
 use tokio::time::{Duration, interval};
 
-type HealthMap = HashMap<u64, bool>;
+type HealthMap = DashMap<u64, bool>;
 
 static DEFAULT_UPSTREAM: OnceCell<Upstream> = OnceCell::const_new();
 static FALLBACK_UPSTREAM: OnceCell<Upstream> = OnceCell::const_new();
 
-static HEALTH_MAP: LazyLock<Arc<RwLock<HealthMap>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
+static HEALTH_MAP: LazyLock<Arc<HealthMap>> = LazyLock::new(|| Arc::new(HealthMap::new()));
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum UpstreamType {
@@ -106,7 +105,6 @@ async fn check() -> Result<(), CheckError> {
     )?;
 
     let health_map = get_health_map();
-    let mut health_map = health_map.write().await;
 
     health_map.insert(default_upstream.hash_addr(), !default_stats.failing);
     health_map.insert(fallback_upstream.hash_addr(), !fallback_stats.failing);
@@ -117,24 +115,17 @@ async fn check() -> Result<(), CheckError> {
 pub async fn select<'a>() -> Option<&'a Upstream> {
     let (default_upstream, fallback_upstream) = get_upstreams()?;
     let health_map = get_health_map();
-    let health_map = health_map.read().await;
 
-    if *health_map
-        .get(&default_upstream.hash_addr())
-        .unwrap_or_else(|| &false)
-    {
+    if *(health_map.get(&default_upstream.hash_addr())?) {
         return Some(default_upstream);
-    } else if *health_map
-        .get(&fallback_upstream.hash_addr())
-        .unwrap_or_else(|| &false)
-    {
+    } else if *(health_map.get(&fallback_upstream.hash_addr())?) {
         return Some(fallback_upstream);
-    }
+    };
 
     None
 }
 
-pub fn get_health_map() -> Arc<RwLock<HealthMap>> {
+pub fn get_health_map() -> Arc<HealthMap> {
     HEALTH_MAP.clone()
 }
 

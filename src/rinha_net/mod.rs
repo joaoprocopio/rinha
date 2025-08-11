@@ -23,6 +23,7 @@ static CLIENT: LazyLock<Client<HttpConnector, Full<Bytes>>> = LazyLock::new(|| {
     client.pool_timer(TokioTimer::new());
     client.pool_idle_timeout(Duration::from_secs(30));
     client.pool_max_idle_per_host(8);
+    client.retry_canceled_requests(false);
 
     let mut conn = HttpConnector::new();
     conn.set_keepalive(Some(Duration::from_secs(30)));

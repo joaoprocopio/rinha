@@ -73,7 +73,6 @@ async fn process_payment(payment: &Payment) {
             if let Err(err) = try_process_payment(&payment, &upstream).await {
                 if let PaymentError::ServerFailed = err {
                     let health_map = rinha_ambulance::get_health_map();
-                    let mut health_map = health_map.write().await;
                     health_map.insert(upstream.hash_addr(), false);
 
                     sleep(backoff(
