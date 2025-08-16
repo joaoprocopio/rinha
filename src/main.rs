@@ -53,7 +53,7 @@ async fn run() -> Result<(), MainError> {
     Ok(tokio::spawn(accept_loop).await??)
 }
 
-#[tokio::main(flavor = "multi_thread")]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     tracing_subscriber::registry()
         .with(
