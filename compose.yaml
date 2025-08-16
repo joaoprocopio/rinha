@@ -1,6 +1,5 @@
 services:
   rinha:
-    platform: "linux/amd64"
     build:
       context: "."
       dockerfile: "./dockerfile"

@@ -1,17 +1,14 @@
-FROM rust:1.88-slim-bookworm AS builder
+FROM rust:1.89-bookworm AS builder
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    cmake
+RUN apt-get update
 
 WORKDIR /app
 COPY . .
 RUN rm -rf target
-RUN RUSTFLAGS="-C target-cpu=native" cargo build --release
+RUN cargo build --release
 
-FROM debian:bookworm-slim AS runner
+FROM gcr.io/distroless/cc-debian12:latest AS runner
 
-COPY --from=builder /app/target/release/rinha /bin
-RUN chmod +x /bin/rinha
+COPY --from=builder /app/target/release/rinha /bin/
 
-CMD ["rinha"]
+CMD ["/bin/rinha"]

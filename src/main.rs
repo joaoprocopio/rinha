@@ -1,6 +1,3 @@
-#[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -59,12 +56,21 @@ async fn run() -> Result<(), MainError> {
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_timer(tracing_subscriber::fmt::time::uptime()))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_timer(tracing_subscriber::fmt::time::uptime())
+                .with_thread_ids(true)
+                .with_target(true)
+                .with_line_number(true)
+                .with_file(true),
+        )
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    tracing::info!("running server...");
+
     if let Err(err) = run().await {
-        tracing::error!(?err);
+        tracing::error!(?err, "aborting server...");
         std::process::exit(1);
     }
 }

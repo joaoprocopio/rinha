@@ -2,7 +2,6 @@ use crate::rinha_domain::Health;
 use crate::rinha_net;
 use crate::{rinha_conf, rinha_net::resolve_socket_addr};
 use dashmap::DashMap;
-use derivative::Derivative;
 use http::{Extensions, Method, Request};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
@@ -25,16 +24,16 @@ pub enum UpstreamType {
     Fallback,
 }
 
-#[derive(Derivative)]
-#[derivative(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Debug)]
 pub struct Upstream {
     pub addr: SocketAddr,
-
-    #[derivative(PartialEq = "ignore")]
-    #[derivative(PartialOrd = "ignore")]
-    #[derivative(Hash = "ignore")]
-    #[derivative(Ord = "ignore")]
     pub ext: Extensions,
+}
+
+impl Hash for Upstream {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.addr.hash(state);
+    }
 }
 
 impl Upstream {
