@@ -5,7 +5,9 @@ members = ["crates/srv", "crates/wrk"]
 [workspace.dependencies]
 tokio = { version = "1.47.1", features = [
     "rt",
+    "io-util",
     "net",
     "macros",
     "parking_lot"
 ] }
+mimalloc = "0.1.47"
