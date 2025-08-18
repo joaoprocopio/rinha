@@ -36,7 +36,7 @@ fn get_http_request_line(header: &[u8]) -> Option<(&[u8], &[u8])> {
     Some((request_line.next()?, request_line.next()?))
 }
 
-async fn payments(stream: &mut TcpStream, _body: &[u8]) -> Result<()> {
+async fn payments(stream: &mut TcpStream) -> Result<()> {
     stream.write_all(OK_RESPONSE).await?;
     Ok(())
 }
@@ -47,14 +47,15 @@ async fn not_found(stream: &mut TcpStream) -> Result<()> {
 }
 
 async fn serve_connection(mut stream: TcpStream) -> Result<()> {
-    let mut recv_buffer = [0u8; 1024];
+    let mut recv_buffer = [0u8; 2 << 9];
     let read_bytes = stream.read(&mut recv_buffer).await?;
 
-    if let Some((header, body)) = split_http_request(&recv_buffer[..read_bytes]) {
-        if let Some(request_line) = get_http_request_line(header) {
-            match request_line {
-                (b"POST", b"/payments") => payments(&mut stream, body).await?,
-                _ => not_found(&mut stream).await?,
+    if let Some((header, _body)) = split_http_request(&recv_buffer[..read_bytes]) {
+        if let Some((method, path)) = get_http_request_line(header) {
+            if method == b"POST" && path.starts_with(b"/payments") {
+                payments(&mut stream).await?
+            } else {
+                not_found(&mut stream).await?
             }
         }
     }
