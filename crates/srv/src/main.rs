@@ -1,17 +1,64 @@
 use tokio::{
-    io::AsyncWriteExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>;
 
-const EMPTY_RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n";
-
 #[global_allocator]
 static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+const OK_RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+const NOT_FOUND_RESPONSE: &[u8] = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+
+const SEPARATOR: &[u8] = b"\r\n";
+const BODY_SEPARATOR: &[u8] = b"\r\n\r\n";
+
+const SEPARATOR_LEN: usize = SEPARATOR.len();
+const BODY_SEPARATOR_LEN: usize = BODY_SEPARATOR.len();
+
+fn split_http_request(request: &[u8]) -> Option<(&[u8], &[u8])> {
+    let body_breakpoint = request
+        .windows(BODY_SEPARATOR_LEN)
+        .position(|window| window == BODY_SEPARATOR)?;
+
+    Some(request.split_at(body_breakpoint + BODY_SEPARATOR_LEN))
+}
+
+fn get_http_request_line(header: &[u8]) -> Option<(&[u8], &[u8])> {
+    let header_break_pos = header
+        .windows(SEPARATOR_LEN)
+        .position(|window| window == SEPARATOR)?;
+
+    let request_line = header.split_at(header_break_pos).0;
+    let mut request_line = request_line.split(|c| *c == b' ');
+
+    Some((request_line.next()?, request_line.next()?))
+}
+
+async fn payments(stream: &mut TcpStream, _body: &[u8]) -> Result<()> {
+    stream.write_all(OK_RESPONSE).await?;
+    Ok(())
+}
+
+async fn not_found(stream: &mut TcpStream) -> Result<()> {
+    stream.write_all(NOT_FOUND_RESPONSE).await?;
+    Ok(())
+}
+
 async fn serve_connection(mut stream: TcpStream) -> Result<()> {
-    stream.write_all(EMPTY_RESPONSE).await?;
+    let mut recv_buffer = [0u8; 1024];
+    let read_bytes = stream.read(&mut recv_buffer).await?;
+
+    if let Some((header, body)) = split_http_request(&recv_buffer[..read_bytes]) {
+        if let Some(request_line) = get_http_request_line(header) {
+            match request_line {
+                (b"POST", b"/payments") => payments(&mut stream, body).await?,
+                _ => not_found(&mut stream).await?,
+            }
+        }
+    }
+
     stream.shutdown().await?;
 
     Ok(())
