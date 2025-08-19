@@ -36,28 +36,18 @@ fn get_http_request_line(header: &[u8]) -> Option<(&[u8], &[u8])> {
     Some((request_line.next()?, request_line.next()?))
 }
 
-async fn payments(stream: &mut TcpStream) -> Result<()> {
-    stream.write_all(OK_RESPONSE).await?;
-    Ok(())
-}
-
-async fn not_found(stream: &mut TcpStream) -> Result<()> {
-    stream.write_all(NOT_FOUND_RESPONSE).await?;
-    Ok(())
-}
-
 async fn serve_connection(mut stream: TcpStream) -> Result<()> {
     let mut recv_buffer = [0u8; 2 << 9];
     let read_bytes = stream.read(&mut recv_buffer).await?;
 
-    if let Some((header, _body)) = split_http_request(&recv_buffer[..read_bytes]) {
-        if let Some((method, path)) = get_http_request_line(header) {
-            if method == b"POST" && path.starts_with(b"/payments") {
-                payments(&mut stream).await?
-            } else {
-                not_found(&mut stream).await?
-            }
-        }
+    let (header, _body) =
+        split_http_request(&recv_buffer[..read_bytes]).ok_or("failed to split http request")?;
+    let (method, path) = get_http_request_line(header).ok_or("failed to get request line")?;
+
+    if method == b"POST" && path.starts_with(b"/payments") {
+        stream.write_all(OK_RESPONSE).await?;
+    } else {
+        stream.write_all(NOT_FOUND_RESPONSE).await?;
     }
 
     stream.shutdown().await?;
@@ -79,9 +69,8 @@ async fn accept_loop(listener: TcpListener) -> Result<()> {
 
 async fn serve() -> Result<()> {
     let listener = TcpListener::bind("0.0.0.0:9999").await?;
-    let accept_loop = accept_loop(listener);
 
-    tokio::spawn(accept_loop).await?
+    tokio::spawn(accept_loop(listener)).await?
 }
 
 #[tokio::main(flavor = "current_thread")]

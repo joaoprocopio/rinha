@@ -1,5 +1,5 @@
 services:
-  rinha:
+  rinha-api:
     build:
       context: "."
       dockerfile: "./dockerfile"
