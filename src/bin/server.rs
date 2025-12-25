@@ -1,11 +1,11 @@
 use anyhow::Ok;
 use axum::{self, routing};
-use rinha::{error::Result, ext};
+use rinha::{error::Result, shared};
 use tokio::{net::TcpListener, runtime as rt};
 
 fn main() {
-    ext::tracing::init_tracing();
-    let runtime = ext::tokio::new_runtime();
+    shared::tracing::init_tracing();
+    let runtime = shared::tokio::new_runtime();
 
     runtime
         .block_on(run(runtime.handle().clone()))
@@ -16,7 +16,7 @@ fn main() {
 }
 
 async fn run(handle: rt::Handle) -> Result<()> {
-    let signal = ext::tokio::shutdown_signal().await?;
+    let signal = shared::tokio::shutdown_signal().await?;
     serve(signal, handle.clone()).await?;
     Ok(())
 }

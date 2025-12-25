@@ -7,4 +7,4 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 pub mod error;
-pub mod ext;
+pub mod shared;
