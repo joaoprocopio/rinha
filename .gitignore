@@ -14,13 +14,3 @@ target/
 *.pdb
 
 # End of https://www.toptal.com/developers/gitignore/api/rust
-
-# storage
-.storage
-
-# flamegraph
-flamegraph.svg
-perf.data*
-
-# logs
-*.logs

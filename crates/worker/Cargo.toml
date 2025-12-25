@@ -1,0 +1,6 @@
+[package]
+name = "worker"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
