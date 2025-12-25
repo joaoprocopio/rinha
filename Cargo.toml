@@ -1,12 +1,9 @@
-[workspace]
-resolver = "3"
-members = ["crates/server", "crates/shared", "crates/worker"]
-
-[workspace.package]
+[package]
+name = "rinha"
 edition = "2024"
 version = "1.0.0"
 
-[workspace.dependencies]
+[dependencies]
 tokio = { version = "1.48.0", features = [
     "rt",
     "parking_lot",
