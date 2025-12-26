@@ -8,3 +8,4 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 pub mod error;
 pub mod server;
 pub mod shared;
+pub mod worker;

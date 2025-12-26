@@ -1,29 +1,25 @@
-fn main() {}
+use anyhow::Ok;
+use axum::body::Bytes;
+use rinha::{error::Result, shared, worker};
+use tokio::{runtime::Handle, sync::mpsc};
 
-/*
-let task_path = server.env.uds_path.clone();
-let mut task_signal = signal.clone();
+fn main() {
+    shared::tracing::init_tracing();
+    let runtime = shared::tokio::new_runtime();
 
-server.handle.spawn(async move {
-    loop {
-        let mut stream = tokio::select! {
-            Ok(conn) = UnixStream::connect(&task_path) => {
-                conn
-            }
-            _ = &mut task_signal => {
-                tracing::info!("gracefully shutting down uds stream listener");
-                break;
-            }
-        };
+    runtime
+        .block_on(run(runtime.handle().clone()))
+        .unwrap_or_else(|err| {
+            tracing::error!("server boot serverfailed with: {}", err);
+            std::process::exit(1);
+        });
+}
 
-        let mut buf = [0; 1024];
+async fn run(handle: Handle) -> Result<()> {
+    let signal = shared::tokio::shutdown_signal().await?;
+    let (sender, receiver) = mpsc::channel::<Bytes>(size_of::<u8>() << 20);
 
-        let _ = tokio::select! {
-            Ok(len) = stream.read(&mut buf) => {
-                let data = unsafe { str::from_utf8_unchecked(&buf[..len]) };
-                tracing::debug!("{data}");
-            }
-        };
-    }
-});
-*/
+    handle.spawn(worker::run_worker()).await?;
+
+    Ok(())
+}

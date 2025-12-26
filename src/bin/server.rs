@@ -20,17 +20,17 @@ async fn run(handle: Handle) -> Result<()> {
     let signal = shared::tokio::shutdown_signal().await?.shared();
 
     let (sender, receiver) = mpsc::channel::<Bytes>(size_of::<u8>() << 20);
-    let server = server::Server::new(handle.clone(), sender, receiver).await?;
+    let server = server::cfg::Server::new(handle.clone(), sender, receiver).await?;
 
     let _ = tokio::try_join!(
         async {
             handle
-                .spawn(server::run_server(signal.clone(), server.clone()))
+                .spawn(server::http::run_http(signal.clone(), server.clone()))
                 .await?
         },
         async {
             handle
-                .spawn(server::run_worker(signal.clone(), server.clone()))
+                .spawn(server::task::run_task(signal.clone(), server.clone()))
                 .await?
         },
     )?;
