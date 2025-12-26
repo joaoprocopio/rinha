@@ -1,36 +1,59 @@
 use crate::{error::Result, server::Server};
 use axum::{Router, body::Bytes, extract::State, routing, serve};
-use futures::FutureExt;
+use futures::{FutureExt, future::Shared};
 use tokio::{
     fs,
-    io::AsyncWriteExt,
-    net::{TcpListener, UnixListener},
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, UnixListener, UnixStream},
 };
 
 pub async fn run_worker(
-    signal: impl Future<Output = ()> + Send + 'static,
+    mut signal: Shared<impl Future<Output = ()> + Send + Sync + 'static>,
     server: Server,
 ) -> Result<()> {
-    let mut signal = signal.boxed();
     let mut receiver = server.receiver.lock().await;
-
     if let Some(uds_dirname) = server.env.uds_path.parent() {
         fs::remove_dir_all(uds_dirname).await?;
         fs::create_dir_all(uds_dirname).await?;
     }
-
     let listener = UnixListener::bind(&server.env.uds_path)?;
+
+    let task_path = server.env.uds_path.clone();
+    let mut task_signal = signal.clone();
+
+    server.handle.spawn(async move {
+        loop {
+            let mut stream = tokio::select! {
+                Ok(conn) = UnixStream::connect(&task_path) => {
+                    conn
+                }
+                _ = &mut task_signal => {
+                    tracing::info!("gracefully shutting down uds stream listener");
+                    break;
+                }
+            };
+
+            let mut buf = [0; 1024];
+
+            let _ = tokio::select! {
+                Ok(len) = stream.read(&mut buf) => {
+                    let data = unsafe { str::from_utf8_unchecked(&buf[..len]) };
+                    tracing::debug!("{data}");
+                }
+            };
+        }
+    });
 
     loop {
         let mut stream = tokio::select! {
-            conn = listener.accept() => {
-                conn.and_then(|conn| Ok(conn.0))
+            Ok(conn) = listener.accept() => {
+                conn.0
             }
             _ = &mut signal => {
                 tracing::info!("gracefully shutting down uds stream listener");
                 break;
             }
-        }?;
+        };
 
         let _ = tokio::select! {
             Some(bytes) = receiver.recv() => {
@@ -49,7 +72,7 @@ pub async fn run_worker(
 }
 
 pub async fn run_server(
-    signal: impl Future<Output = ()> + Send + 'static,
+    signal: impl Future<Output = ()> + Send + Sync + 'static,
     server: Server,
 ) -> Result<()> {
     let listener = TcpListener::bind(server.env.addr.as_str()).await?;

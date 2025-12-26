@@ -1,4 +1,3 @@
-#![forbid(unsafe_code)]
 #![warn(clippy::all)]
 #![warn(clippy::perf)]
 #![warn(clippy::cargo)]
