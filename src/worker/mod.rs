@@ -2,6 +2,8 @@ use futures::FutureExt;
 pub use state::Worker;
 use tokio::{io::AsyncReadExt, net::UnixStream};
 
+use crate::shared::data::Payment;
+
 mod state;
 
 pub async fn run_worker(signal: impl Future<Output = ()> + Send + Sync + 'static, worker: Worker) {
@@ -22,8 +24,8 @@ pub async fn run_worker(signal: impl Future<Output = ()> + Send + Sync + 'static
 
         tokio::select! {
             Ok(len) = stream.read(&mut buf) => {
-                let data = unsafe { str::from_utf8_unchecked(&buf[..len]) };
-                dbg!(data);
+                let payment = serde_json::from_slice::<Payment>(&buf[..len]);
+                dbg!(&payment);
             }
             _ = &mut signal => {
                 tracing::info!("gracefully shutting down channel receiver");
