@@ -1,6 +1,41 @@
 use crate::{error::Result, server::Server};
 use axum::{Router, body::Bytes, extract::State, routing, serve};
-use tokio::{net::TcpListener, runtime::Handle, sync::mpsc::Sender};
+use tokio::{
+    io::AsyncWriteExt,
+    net::{TcpListener, UnixStream},
+    runtime::Handle,
+    sync::mpsc::{Receiver, Sender},
+};
+
+pub async fn run_server_worker(
+    signal: impl Future<Output = ()> + Send + Sync + 'static,
+    mut receiver: Receiver<Bytes>,
+) -> Result<()> {
+    // TODO: receber o endereço do socket uds como variavel de ambiente
+    let mut stream = UnixStream::connect("/run/rinha/rinha.sock").await?;
+
+    tokio::pin!(signal);
+
+    loop {
+        tokio::select! {
+            _ = &mut signal => {
+                tracing::info!("shutting down server worker");
+                break;
+            }
+            Some(bytes) = receiver.recv() => {
+                stream.write_all(&bytes).await.unwrap_or_else(|err|{
+                    tracing::error!("writing to uds socket failed with: {err}");
+                });
+            }
+        }
+    }
+
+    stream.shutdown().await.unwrap_or_else(|err| {
+        tracing::error!("uds socket shutdown failed with: {err}");
+    });
+
+    Ok(())
+}
 
 pub async fn run_server(
     signal: impl Future<Output = ()> + Send + Sync + 'static,
@@ -22,14 +57,8 @@ pub async fn run_server(
     Ok(())
 }
 
-// pub async fn run_uds_receiver() -> Result<()> {
-//     let stream = UnixStream::connect("/run/rinha/rinha.sock").await?;
-
-//     Ok(())
-// }
-
 async fn payments(State(state): State<Server>, buf: Bytes) -> () {
     state.sender.send(buf).await.unwrap_or_else(|err| {
-        tracing::error!("failed to send buffer: {err}",);
+        tracing::error!("failed to send buffer: {err}");
     });
 }

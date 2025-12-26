@@ -6,6 +6,12 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+pub mod prelude {
+    pub use futures::prelude::*;
+}
+
+pub use prelude::*;
+
 pub mod error;
 pub mod server;
 pub mod shared;

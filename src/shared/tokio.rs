@@ -8,7 +8,7 @@ pub fn new_runtime() -> tokio::runtime::Runtime {
     {
         Ok(rt) => rt,
         Err(err) => {
-            tracing::error!(?err);
+            tracing::error!("tokio runtime boot failed: {err}");
             std::process::exit(1);
         }
     }
@@ -21,10 +21,10 @@ pub async fn shutdown_signal() -> Result<impl Future<Output = ()>> {
     let signal_watcher = async move {
         tokio::select! {
             _ = terminate.recv() => {
-                tracing::debug!("recv terminate signal");
+                tracing::info!("SIGTERM received");
             },
             _ = interrupt.recv() => {
-                tracing::debug!("recv interrupt signal");
+                tracing::info!("SIGINT received");
             }
         }
     };
