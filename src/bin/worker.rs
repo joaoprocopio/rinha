@@ -1,10 +1,10 @@
 use anyhow::Ok;
-use rinha::{error::Result, shared, worker};
+use rinha::{error::Result, ext, shared, worker};
 use tokio::runtime::Handle;
 
 fn main() {
-    shared::tracing::init_tracing();
-    let runtime = shared::tokio::new_runtime();
+    ext::tracing::init_tracing();
+    let runtime = ext::tokio::new_runtime();
 
     runtime
         .block_on(run(runtime.handle().clone()))
@@ -15,7 +15,7 @@ fn main() {
 }
 
 async fn run(handle: Handle) -> Result<()> {
-    let signal = shared::tokio::shutdown_signal().await?;
+    let signal = ext::tokio::shutdown_signal().await?;
     handle.spawn(worker::run_worker()).await?;
     Ok(())
 }
