@@ -5,10 +5,7 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
-use tokio::{
-    runtime::Handle,
-    sync::{Mutex, mpsc},
-};
+use tokio::{runtime::Handle, sync::mpsc};
 
 #[derive(Debug, Clone)]
 pub struct App {
@@ -34,7 +31,6 @@ pub struct AppInner {
     pub env: AppEnv,
     pub handle: Handle,
     pub sender: mpsc::Sender<Bytes>,
-    pub receiver: Mutex<mpsc::Receiver<Bytes>>,
 }
 
 #[derive(Debug)]
@@ -44,11 +40,7 @@ pub struct AppEnv {
 }
 
 impl App {
-    pub async fn new(
-        handle: Handle,
-        sender: mpsc::Sender<Bytes>,
-        receiver: mpsc::Receiver<Bytes>,
-    ) -> Result<Self> {
+    pub async fn new(handle: Handle, sender: mpsc::Sender<Bytes>) -> Result<Self> {
         let env = AppEnv::env_or_default()?;
 
         Ok(Self {
@@ -56,7 +48,6 @@ impl App {
                 env: env,
                 handle: handle,
                 sender: sender,
-                receiver: Mutex::new(receiver),
             }),
         })
     }

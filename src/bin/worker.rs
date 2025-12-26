@@ -1,7 +1,6 @@
 use anyhow::Ok;
-use axum::body::Bytes;
 use rinha::{error::Result, shared, worker};
-use tokio::{runtime::Handle, sync::mpsc};
+use tokio::runtime::Handle;
 
 fn main() {
     shared::tracing::init_tracing();
@@ -17,9 +16,6 @@ fn main() {
 
 async fn run(handle: Handle) -> Result<()> {
     let signal = shared::tokio::shutdown_signal().await?;
-    let (sender, receiver) = mpsc::channel::<Bytes>(size_of::<u8>() << 20);
-
     handle.spawn(worker::run_worker()).await?;
-
     Ok(())
 }
