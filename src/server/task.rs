@@ -1,19 +1,19 @@
-use crate::{error::Result, shared::app::App};
+use crate::{error::Result, server::Server};
 use axum::body::Bytes;
 use futures::FutureExt;
 use tokio::{fs, io::AsyncWriteExt, net::UnixListener, sync::mpsc::Receiver};
 
 pub async fn run_task(
     signal: impl Future<Output = ()> + Send + Sync + 'static,
-    app: App,
+    server: Server,
     mut receiver: Receiver<Bytes>,
 ) -> Result<()> {
     let mut signal = signal.boxed();
-    if let Some(uds_dirname) = app.env.uds_path.parent() {
+    if let Some(uds_dirname) = server.env.uds_path.parent() {
         fs::remove_dir_all(uds_dirname).await?;
         fs::create_dir_all(uds_dirname).await?;
     }
-    let listener = UnixListener::bind(&app.env.uds_path)?;
+    let listener = UnixListener::bind(&server.env.uds_path)?;
 
     loop {
         let mut stream = tokio::select! {
