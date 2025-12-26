@@ -1,6 +1,7 @@
 use anyhow::Ok;
 use axum::body::Bytes;
-use rinha::{error::Result, prelude::*, server, shared};
+use futures::FutureExt;
+use rinha::{error::Result, server, shared};
 use tokio::{runtime::Handle, sync::mpsc};
 
 fn main() {
@@ -18,21 +19,21 @@ fn main() {
 async fn run(handle: Handle) -> Result<()> {
     let signal = shared::tokio::shutdown_signal().await?.shared();
 
-    let (sender, receiver) = mpsc::channel::<Bytes>(
-        /* TODO: calcular um tamanho melhor pra esse cara */ 1024 * 1000,
-    );
+    // TODO: calcular um tamanho melhor pra esse cara
+    let (sender, receiver) = mpsc::channel::<Bytes>(size_of::<u8>() * 2048);
+    let server = server::Server::new(handle.clone(), sender, receiver).await?;
 
     let _ = tokio::try_join!(
         async {
             handle
-                .spawn(server::run_server(signal.clone(), handle.clone(), sender))
+                .spawn(server::run_server(signal.clone(), server.clone()))
                 .await?
         },
         async {
             handle
-                .spawn(server::run_server_worker(signal.clone(), receiver))
+                .spawn(server::run_worker(signal.clone(), server.clone()))
                 .await?
-        }
+        },
     )?;
 
     Ok(())

@@ -1,25 +1,34 @@
 use crate::{error::Result, server::Server};
 use axum::{Router, body::Bytes, extract::State, routing, serve};
+use futures::FutureExt;
 use tokio::{
+    fs,
     io::AsyncWriteExt,
-    net::{TcpListener, UnixStream},
-    runtime::Handle,
-    sync::mpsc::{Receiver, Sender},
+    net::{TcpListener, UnixListener},
 };
 
-pub async fn run_server_worker(
-    signal: impl Future<Output = ()> + Send + Sync + 'static,
-    mut receiver: Receiver<Bytes>,
+pub async fn run_worker(
+    signal: impl Future<Output = ()> + Send + 'static,
+    server: Server,
 ) -> Result<()> {
-    // TODO: receber o endereço do socket uds como variavel de ambiente
-    let mut stream = UnixStream::connect("/run/rinha/rinha.sock").await?;
+    let mut signal = signal.boxed();
+    let mut receiver = server.receiver.lock().await;
 
-    tokio::pin!(signal);
+    if let Some(uds_dirname) = server.env.uds_path.parent() {
+        fs::create_dir_all(uds_dirname).await?;
+    }
+
+    let listener = UnixListener::bind(&server.env.uds_path)?;
 
     loop {
+        let (mut stream, _) = listener.accept().await?;
+
         tokio::select! {
             _ = &mut signal => {
                 tracing::info!("shutting down server worker");
+                stream.shutdown().await.unwrap_or_else(|err| {
+                    tracing::error!("uds socket shutdown failed with: {err}");
+                });
                 break;
             }
             Some(bytes) = receiver.recv() => {
@@ -30,19 +39,13 @@ pub async fn run_server_worker(
         }
     }
 
-    stream.shutdown().await.unwrap_or_else(|err| {
-        tracing::error!("uds socket shutdown failed with: {err}");
-    });
-
     Ok(())
 }
 
 pub async fn run_server(
-    signal: impl Future<Output = ()> + Send + Sync + 'static,
-    handle: Handle,
-    sender: Sender<Bytes>,
+    signal: impl Future<Output = ()> + Send + 'static,
+    server: Server,
 ) -> Result<()> {
-    let server = Server::new(handle, sender).await?;
     let listener = TcpListener::bind(server.env.addr.as_str()).await?;
     let router = Router::new()
         .route("/payments", routing::post(payments))

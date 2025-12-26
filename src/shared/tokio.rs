@@ -20,10 +20,10 @@ pub async fn shutdown_signal() -> Result<impl Future<Output = ()>> {
 
     let signal_watcher = async move {
         tokio::select! {
-            _ = terminate.recv() => {
+            Some(_) = terminate.recv() => {
                 tracing::info!("SIGTERM received");
             },
-            _ = interrupt.recv() => {
+            Some(_) = interrupt.recv() => {
                 tracing::info!("SIGINT received");
             }
         }
