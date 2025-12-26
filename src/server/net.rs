@@ -1,10 +1,10 @@
 use crate::{error::Result, server::Server};
 use axum::{Router, body::Bytes, extract::State, routing, serve};
-use futures::{FutureExt, future::Shared};
+use futures::future::Shared;
 use tokio::{
     fs,
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, UnixListener, UnixStream},
+    io::AsyncWriteExt,
+    net::{TcpListener, UnixListener},
 };
 
 pub async fn run_worker(
@@ -17,32 +17,6 @@ pub async fn run_worker(
         fs::create_dir_all(uds_dirname).await?;
     }
     let listener = UnixListener::bind(&server.env.uds_path)?;
-
-    let task_path = server.env.uds_path.clone();
-    let mut task_signal = signal.clone();
-
-    server.handle.spawn(async move {
-        loop {
-            let mut stream = tokio::select! {
-                Ok(conn) = UnixStream::connect(&task_path) => {
-                    conn
-                }
-                _ = &mut task_signal => {
-                    tracing::info!("gracefully shutting down uds stream listener");
-                    break;
-                }
-            };
-
-            let mut buf = [0; 1024];
-
-            let _ = tokio::select! {
-                Ok(len) = stream.read(&mut buf) => {
-                    let data = unsafe { str::from_utf8_unchecked(&buf[..len]) };
-                    tracing::debug!("{data}");
-                }
-            };
-        }
-    });
 
     loop {
         let mut stream = tokio::select! {
