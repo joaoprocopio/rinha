@@ -1,5 +1,5 @@
 use anyhow::Ok;
-use rinha::{error::Result, ext, shared, worker};
+use rinha::{error::Result, ext, worker};
 use tokio::runtime::Handle;
 
 fn main() {
