@@ -452,6 +452,8 @@ dependencies = [
  "axum",
  "futures",
  "mimalloc",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
