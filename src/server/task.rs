@@ -33,7 +33,7 @@ pub async fn run_task(
                 });
             }
             _ = &mut signal => {
-                tracing::info!("gracefully shutting down channel received");
+                tracing::info!("gracefully shutting down channel receiver");
                 break;
             }
         };

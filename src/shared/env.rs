@@ -1,17 +1,6 @@
 use crate::error::Result;
 use std::{env, ffi::OsStr, path::PathBuf, str::FromStr};
 
-pub fn env_or<K, T>(key: K, default: T) -> T
-where
-    K: AsRef<OsStr>,
-    T: FromStr,
-{
-    env::var(key)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or_else(|| default)
-}
-
 #[derive(Debug)]
 pub struct Env {
     pub addr: String,
@@ -25,4 +14,15 @@ impl Env {
             uds_path: env_or("RINHA_UDS_PATH", "/tmp/rinha/rinha.sock".into()),
         })
     }
+}
+
+fn env_or<K, T>(key: K, default: T) -> T
+where
+    K: AsRef<OsStr>,
+    T: FromStr,
+{
+    env::var(key)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(|| default)
 }

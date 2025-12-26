@@ -16,6 +16,9 @@ fn main() {
 
 async fn run(handle: Handle) -> Result<()> {
     let signal = ext::tokio::shutdown_signal().await?;
-    handle.spawn(worker::run_worker()).await?;
+    let worker = worker::Worker::new(handle.clone()).await?;
+
+    handle.spawn(worker::run_worker(signal, worker)).await?;
+
     Ok(())
 }
