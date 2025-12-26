@@ -11,54 +11,58 @@ use tokio::{
 };
 
 #[derive(Debug, Clone)]
-pub struct Server(Arc<ServerInner>);
+pub struct App {
+    inner: Arc<AppInner>,
+}
 
-impl Deref for Server {
-    type Target = Arc<ServerInner>;
+impl Deref for App {
+    type Target = Arc<AppInner>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.inner
     }
 }
 
-impl DerefMut for Server {
+impl DerefMut for App {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.inner
     }
 }
 
 #[derive(Debug)]
-pub struct ServerInner {
-    pub env: ServerEnv,
+pub struct AppInner {
+    pub env: AppEnv,
     pub handle: Handle,
     pub sender: mpsc::Sender<Bytes>,
     pub receiver: Mutex<mpsc::Receiver<Bytes>>,
 }
 
 #[derive(Debug)]
-pub struct ServerEnv {
+pub struct AppEnv {
     pub addr: String,
     pub uds_path: PathBuf,
 }
 
-impl Server {
+impl App {
     pub async fn new(
         handle: Handle,
         sender: mpsc::Sender<Bytes>,
         receiver: mpsc::Receiver<Bytes>,
     ) -> Result<Self> {
-        let env = ServerEnv::env_or_default()?;
+        let env = AppEnv::env_or_default()?;
 
-        Ok(Self(Arc::new(ServerInner {
-            env: env,
-            handle: handle,
-            sender: sender,
-            receiver: Mutex::new(receiver),
-        })))
+        Ok(Self {
+            inner: Arc::new(AppInner {
+                env: env,
+                handle: handle,
+                sender: sender,
+                receiver: Mutex::new(receiver),
+            }),
+        })
     }
 }
 
-impl ServerEnv {
+impl AppEnv {
     fn env_or_default() -> Result<Self> {
         Ok(Self {
             addr: env_or("RINHA_SERVER_ADDR", "0.0.0.0:8000".into()),

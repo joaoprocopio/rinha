@@ -1,10 +1,10 @@
-use crate::{error::Result, server::cfg::Server};
+use crate::{error::Result, shared::app::App};
 use futures::FutureExt;
 use tokio::{fs, io::AsyncWriteExt, net::UnixListener};
 
 pub async fn run_task(
     signal: impl Future<Output = ()> + Send + Sync + 'static,
-    server: Server,
+    server: App,
 ) -> Result<()> {
     let mut signal = signal.boxed();
     let mut receiver = server.receiver.lock().await;

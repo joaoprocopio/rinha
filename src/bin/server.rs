@@ -1,7 +1,11 @@
 use anyhow::Ok;
 use axum::body::Bytes;
 use futures::FutureExt;
-use rinha::{error::Result, server, shared};
+use rinha::{
+    error::Result,
+    server,
+    shared::{self, app::App},
+};
 use tokio::{runtime::Handle, sync::mpsc};
 
 fn main() {
@@ -20,17 +24,17 @@ async fn run(handle: Handle) -> Result<()> {
     let signal = shared::tokio::shutdown_signal().await?.shared();
 
     let (sender, receiver) = mpsc::channel::<Bytes>(size_of::<u8>() << 20);
-    let server = server::cfg::Server::new(handle.clone(), sender, receiver).await?;
+    let app = App::new(handle.clone(), sender, receiver).await?;
 
     let _ = tokio::try_join!(
         async {
             handle
-                .spawn(server::http::run_http(signal.clone(), server.clone()))
+                .spawn(server::http::run_http(signal.clone(), app.clone()))
                 .await?
         },
         async {
             handle
-                .spawn(server::task::run_task(signal.clone(), server.clone()))
+                .spawn(server::task::run_task(signal.clone(), app.clone()))
                 .await?
         },
     )?;

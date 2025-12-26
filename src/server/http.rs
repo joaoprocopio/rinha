@@ -1,15 +1,15 @@
-use crate::{error::Result, server::cfg::Server};
+use crate::{error::Result, shared::app::App};
 use axum::{Router, body::Bytes, extract::State, routing, serve};
 use tokio::net::TcpListener;
 
 pub async fn run_http(
     signal: impl Future<Output = ()> + Send + Sync + 'static,
-    server: Server,
+    app: App,
 ) -> Result<()> {
-    let listener = TcpListener::bind(server.env.addr.as_str()).await?;
+    let listener = TcpListener::bind(app.env.addr.as_str()).await?;
     let router = Router::new()
         .route("/payments", routing::post(payments))
-        .with_state(server);
+        .with_state(app);
 
     tracing::info!("server listening on: http://{}", listener.local_addr()?);
 
@@ -20,8 +20,8 @@ pub async fn run_http(
     Ok(())
 }
 
-async fn payments(State(state): State<Server>, buf: Bytes) -> () {
-    state.sender.send(buf).await.unwrap_or_else(|err| {
+async fn payments(State(app): State<App>, buf: Bytes) -> () {
+    app.sender.send(buf).await.unwrap_or_else(|err| {
         tracing::error!("failed to send buffer: {err}");
     });
 }
