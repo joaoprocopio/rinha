@@ -32,7 +32,7 @@ pub async fn run_worker(
             }
         }?;
 
-        tokio::select! {
+        let _ = tokio::select! {
             Some(bytes) = receiver.recv() => {
                 stream.write_all(&bytes).await.unwrap_or_else(|err|{
                     tracing::error!("writing to uds socket failed with: {err}");
@@ -42,7 +42,7 @@ pub async fn run_worker(
                 tracing::info!("gracefully shutting down channel received");
                 break;
             }
-        }
+        };
     }
 
     Ok(())
