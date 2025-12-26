@@ -1,7 +1,12 @@
 use crate::{error::Result, server::Server};
 use axum::body::Bytes;
 use futures::FutureExt;
-use tokio::{fs, io::AsyncWriteExt, net::UnixListener, sync::mpsc::Receiver};
+use tokio::{
+    fs,
+    io::{self, AsyncWriteExt},
+    net::UnixListener,
+    sync::mpsc::Receiver,
+};
 
 pub async fn run_task(
     signal: impl Future<Output = ()> + Send + Sync + 'static,
@@ -10,8 +15,8 @@ pub async fn run_task(
 ) -> Result<()> {
     let mut signal = signal.boxed();
     if let Some(uds_dirname) = server.env.uds_path.parent() {
-        fs::remove_dir_all(uds_dirname).await?;
-        fs::create_dir_all(uds_dirname).await?;
+        filter_io_err(fs::remove_dir_all(uds_dirname).await)?;
+        filter_io_err(fs::create_dir_all(uds_dirname).await)?;
     }
     let listener = UnixListener::bind(&server.env.uds_path)?;
 
@@ -37,6 +42,18 @@ pub async fn run_task(
                 break;
             }
         };
+    }
+
+    Ok(())
+}
+
+fn filter_io_err(res: io::Result<()>) -> io::Result<()> {
+    if let Err(err) = res {
+        if err.kind() == io::ErrorKind::NotFound {
+            return Ok(());
+        }
+
+        return Err(err);
     }
 
     Ok(())

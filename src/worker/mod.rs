@@ -24,6 +24,7 @@ pub async fn run_worker(signal: impl Future<Output = ()> + Send + Sync + 'static
         tokio::select! {
             Ok(len) = stream.read(&mut buf) => {
                 let payment = serde_json::from_slice::<Payment>(&buf[..len]);
+                tracing::debug!("{:?}", payment);
             }
             _ = &mut signal => {
                 tracing::info!("gracefully shutting uds stream reader");
