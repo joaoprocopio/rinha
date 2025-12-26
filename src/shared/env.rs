@@ -10,7 +10,7 @@ pub struct Env {
 impl Env {
     pub fn env_or_default() -> Result<Self> {
         Ok(Self {
-            addr: env_or("RINHA_SERVER_ADDR", "0.0.0.0:8000".into()),
+            addr: env_or("RINHA_SERVER_ADDR", "0.0.0.0:9999".into()),
             uds_path: env_or("RINHA_UDS_PATH", "/tmp/rinha/rinha.sock".into()),
         })
     }

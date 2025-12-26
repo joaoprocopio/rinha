@@ -1,0 +1,27 @@
+services:
+  rinha_server:
+    build:
+      context: "."
+      dockerfile: "./dockerfile.server"
+    # networks:
+    #   - "payment-processor"
+    environment:
+      RINHA_ADDR: "0.0.0.0:9999"
+      RINHA_DEFAULT_UPSTREAM_ADDR: "host.docker.internal:8001"
+      RINHA_FALLBACK_UPSTREAM_ADDR: "host.docker.internal:8002"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9999:9999"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: "350MB"
+        reservations:
+          cpus: "1.5"
+          memory: "350MB"
+
+# networks:
+#   payment-processor:
+#     external: true
