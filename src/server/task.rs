@@ -21,7 +21,7 @@ pub async fn run_task(
                 conn.0
             }
             _ = &mut signal => {
-                tracing::info!("gracefully shutting down uds stream listener");
+                tracing::info!("gracefully shutting down uds stream");
                 break;
             }
         };
@@ -33,7 +33,7 @@ pub async fn run_task(
                 });
             }
             _ = &mut signal => {
-                tracing::info!("gracefully shutting down channel receiver");
+                tracing::info!("gracefully shutting uds writer");
                 break;
             }
         };
