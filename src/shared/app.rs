@@ -1,8 +1,7 @@
-use crate::{error::Result, shared::env::env_or};
+use crate::{error::Result, shared::env::Env};
 use axum::body::Bytes;
 use std::{
     ops::{Deref, DerefMut},
-    path::PathBuf,
     sync::Arc,
 };
 use tokio::{runtime::Handle, sync::mpsc};
@@ -28,20 +27,14 @@ impl DerefMut for App {
 
 #[derive(Debug)]
 pub struct AppInner {
-    pub env: AppEnv,
+    pub env: Env,
     pub handle: Handle,
     pub sender: mpsc::Sender<Bytes>,
 }
 
-#[derive(Debug)]
-pub struct AppEnv {
-    pub addr: String,
-    pub uds_path: PathBuf,
-}
-
 impl App {
     pub async fn new(handle: Handle, sender: mpsc::Sender<Bytes>) -> Result<Self> {
-        let env = AppEnv::env_or_default()?;
+        let env = Env::env_or_default()?;
 
         Ok(Self {
             inner: Arc::new(AppInner {
@@ -49,15 +42,6 @@ impl App {
                 handle: handle,
                 sender: sender,
             }),
-        })
-    }
-}
-
-impl AppEnv {
-    fn env_or_default() -> Result<Self> {
-        Ok(Self {
-            addr: env_or("RINHA_SERVER_ADDR", "0.0.0.0:8000".into()),
-            uds_path: env_or("RINHA_UDS_PATH", "/tmp/rinha/rinha.sock".into()),
         })
     }
 }

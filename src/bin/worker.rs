@@ -9,7 +9,7 @@ fn main() {
     runtime
         .block_on(run(runtime.handle().clone()))
         .unwrap_or_else(|err| {
-            tracing::error!("server boot serverfailed with: {}", err);
+            tracing::error!("worker boot failed with: {}", err);
             std::process::exit(1);
         });
 }
