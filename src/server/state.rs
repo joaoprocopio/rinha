@@ -25,7 +25,7 @@ pub struct ServerInner {
 
 impl Server {
     pub async fn new(handle: Handle, sender: mpsc::Sender<Bytes>) -> Result<Self> {
-        let env = Env::env_or_default()?;
+        let env = Env::from_env_or_default()?;
 
         Ok(Self {
             inner: Arc::new(ServerInner {

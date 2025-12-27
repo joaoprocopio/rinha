@@ -5,6 +5,8 @@ use tokio::{io::AsyncReadExt, net::UnixStream};
 
 mod state;
 
+const RECVBUF_SIZE: usize = 2048;
+
 pub async fn run_worker(signal: impl Future<Output = ()> + Send + Sync + 'static, worker: Worker) {
     let mut signal = signal.boxed();
 
@@ -19,12 +21,11 @@ pub async fn run_worker(signal: impl Future<Output = ()> + Send + Sync + 'static
             }
         };
 
-        let mut buf: [u8; _] = [0; 2048];
+        let mut buf: [u8; _] = [0; RECVBUF_SIZE];
 
         tokio::select! {
             Ok(len) = stream.read(&mut buf) => {
-                let payment = serde_json::from_slice::<Payment>(&buf[..len]);
-                tracing::debug!("{:?}", payment);
+                process_payment(buf, len).await;
             }
             _ = &mut signal => {
                 tracing::info!("gracefully shutting uds stream reader");
@@ -32,4 +33,9 @@ pub async fn run_worker(signal: impl Future<Output = ()> + Send + Sync + 'static
             }
         };
     }
+}
+
+async fn process_payment(buf: [u8; RECVBUF_SIZE], len: usize) {
+    let payment = serde_json::from_slice::<Payment>(&buf[..len]);
+    tracing::debug!("{:?}", payment);
 }

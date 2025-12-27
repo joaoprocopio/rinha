@@ -23,7 +23,7 @@ pub struct WorkerInner {
 
 impl Worker {
     pub async fn new(handle: Handle) -> Result<Self> {
-        let env = Env::env_or_default()?;
+        let env = Env::from_env_or_default()?;
 
         Ok(Self {
             inner: Arc::new(WorkerInner {
